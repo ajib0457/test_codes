@@ -1,17 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from sympy import *
-from matplotlib import cm
 import math as mth
 import h5py
 import sklearn.preprocessing as skl
 
-sim_sz=60#Mpc
-grid_nodes=200
+sim_sz=60         #Mpc/h
+grid_nodes=200  #Density grid resolution
+smooth_scl=3.5    #Mpc/h
 #Symbolize variables and specify function
 
-phys_filt_len=60
-f=h5py.File("/import/oth3/ajib0457/Peng_test_data_run/cat_reform/bolchoi_DTFE_rockstar_box_%scubed_xyz_vxyz_jxyz_m_r.h5"%phys_filt_len, 'r')#xyz vxvyvz jxjyjz & Rmass & Rvir: Halo radius (kpc/h comoving).
+f=h5py.File("/import/oth3/ajib0457/Peng_test_data_run/cat_reform/bolchoi_DTFE_rockstar_box_%scubed_xyz_vxyz_jxyz_m_r.h5"%sim_sz, 'r')#xyz vxvyvz jxjyjz & Rmass & Rvir: Halo radius (kpc/h comoving).
 data=f['/halo'][:]
 f.close()
 
@@ -48,7 +47,6 @@ for i in range(len(Xc)):
     grid_index_z=mth.trunc(halos[i,2]*Zc_mult-Zc_minus)   
     image[grid_index_x,grid_index_y,grid_index_z]+=h_mass[i] 
 
-
 img_x,img_y,img_z=np.shape(image)
 
 X,Y,Z,s=symbols('X Y Z s')
@@ -70,9 +68,9 @@ fzy=lambdify((X,Y,Z,s),hprimezy,'numpy')
 #3d meshgrid for each kernel and evaluate 6 partial derivatives to generate 9 kernels
 
 #Kernal settings
-s=11.7
+s=1.0*smooth_scl/sim_sz*grid_nodes
 kern_x,kern_y,kern_z=img_x,img_y,img_z #kernel size
-in_val,fnl_val=-100,100
+in_val,fnl_val=-grid_nodes/2,grid_nodes/2
 
 #Kernel generator
 X,Y,Z=np.meshgrid(np.linspace(in_val,fnl_val,kern_y),np.linspace(in_val,fnl_val,kern_x),np.linspace(in_val,fnl_val,kern_z))
@@ -154,11 +152,6 @@ values=np.reshape(eigvecs.transpose(0,2,1),(vec_row*vec_arr_num,vec_col))#orient
 
 eigvals_unsorted=eigvals_unsorted.flatten()
 vecsvals=np.column_stack((eigvals_unsorted,values))
-
-f=h5py.File("/import/oth3/ajib0457/Peng_test_data_run/correl/my_den/files/output_files/peng_sample_eigpairs.h5" , 'w')
-f.create_dataset('/eigvals',data=eigvals_unsorted)
-f.create_dataset('/eigvecs',data=eigvecs)
-f.close()
 
 lss=['filament','sheet','void','cluster']#Choose which LSS you would like to get classified
 def lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three):
@@ -255,7 +248,7 @@ recon_vecs_x=eig_fnl[:,1]
 recon_vecs_y=eig_fnl[:,2]
 recon_vecs_z=eig_fnl[:,3]
 
-#fit in dot product code!!!!
+#Dot Product
 recon_vecs_flt_unnorm=np.column_stack((recon_vecs_x,recon_vecs_y,recon_vecs_z))
 del recon_vecs_x
 del recon_vecs_y
@@ -269,69 +262,74 @@ recon_vecs_unnorm=np.reshape(recon_vecs_flt_unnorm,(grid_nodes,grid_nodes,grid_n
 del recon_vecs_flt_unnorm
 # -----------------
 
-#HALOS ------------
-mass_bin=0
-tot_mass_bins=6
+tot_mass_bins=4
 
 partcl_500=np.where((data[:,9]/(1.35*10**8))>=500)#filter out halos with <500 particles
 data=data[partcl_500]
-
 halo_mass=data[:,9]
 log_halo_mass=np.log10(halo_mass)#convert into log(M)
 mass_intvl=(np.max(log_halo_mass)-np.min(log_halo_mass))/tot_mass_bins
-#del halo_mass
-
-low_int_mass=np.min(log_halo_mass)+mass_intvl*mass_bin
-hi_int_mass=low_int_mass+mass_intvl
-mass_mask=np.zeros(len(log_halo_mass))
-loint=np.where(log_halo_mass>=low_int_mass)#Change these two numbers as according to the above intervals
-hiint=np.where(log_halo_mass<hi_int_mass)#Change these two numbers as according to the above intervals
-mass_mask[loint]=1
-mass_mask[hiint]=mass_mask[hiint]+1
-mass_indx=np.where(mass_mask==2)
-
-#Angular momentum
-Lx=data[:,6]
-Ly=data[:,7]
-Lz=data[:,8]
-#Positions
-Xc=data[:,0]
-Xc=Xc[mass_indx]
-Yc=data[:,1]
-Yc=Yc[mass_indx]
-Zc=data[:,2]
-Zc=Zc[mass_indx]
-del data
-#normalized angular momentum vectors v1
-halos_mom=np.column_stack((Lx,Ly,Lz))
-halos_mom=halos_mom[mass_indx]
-norm_halos_mom=skl.normalize(halos_mom)
-halos=np.column_stack((Xc,Yc,Zc,norm_halos_mom))
-# -----------------
-
-#grid=np.zeros((grid_nodes,grid_nodes,grid_nodes))
-store_spin=[]
-for i in range(len(Xc)):
-   #Create index related to the eigenvector bins
-    grid_index_x=mth.trunc(halos[i,0]*Xc_mult-Xc_minus)      
-    grid_index_y=mth.trunc(halos[i,1]*Yc_mult-Yc_minus) 
-    grid_index_z=mth.trunc(halos[i,2]*Zc_mult-Zc_minus) 
-    #calculate dot product and bin
-    if (mask[grid_index_x,grid_index_y,grid_index_z]==2):#condition includes recon_vecs_unnorm so that I may normalize the vectors which are being processed
-        spin_dot=np.inner(halos[i,3:6],recon_vecs[grid_index_x,grid_index_y,grid_index_z,:]) 
-        store_spin.append(spin_dot)
-del recon_vecs_unnorm
-del recon_vecs
-del halos
-store_spin=np.asarray(store_spin) 
-
-#in terms of pixels
-pxl_length_gauss=1.*s/(2*fnl_val)*grid_nodes
-#in terms of Mpc/h
-std_dev_phys=pxl_length_gauss*(1.*sim_sz/grid_nodes)
-     
-#f=h5py.File('/import/oth3/ajib0457/mu_code_prep/DTFE_grid%d_spin_store_fil_Log%s-%s_smth%sMpc_%sbins.h5'%(grid_nodes,round(low_int_mass,2),round(hi_int_mass,2),round(std_dev_phys,3),tot_mass_bins),'w')     
-#f.create_dataset('/dp',data=store_spin)
-#f.close()
 
 
+for mass_bin in range(tot_mass_bins):
+    
+    low_int_mass=np.min(log_halo_mass)+mass_intvl*mass_bin
+    hi_int_mass=low_int_mass+mass_intvl
+    mass_mask=np.zeros(len(log_halo_mass))
+    loint=np.where(log_halo_mass>=low_int_mass)#Change these two numbers as according to the above intervals
+    hiint=np.where(log_halo_mass<hi_int_mass)#Change these two numbers as according to the above intervals
+    mass_mask[loint]=1
+    mass_mask[hiint]=mass_mask[hiint]+1
+    mass_indx=np.where(mass_mask==2)
+    
+    #Angular momentum
+    Lx=data[:,6]
+    Ly=data[:,7]
+    Lz=data[:,8]
+    #Positions
+    Xc=data[:,0]
+    Xc=Xc[mass_indx]
+    Yc=data[:,1]
+    Yc=Yc[mass_indx]
+    Zc=data[:,2]
+    Zc=Zc[mass_indx]
+    
+    #normalized angular momentum vectors v1
+    halos_mom=np.column_stack((Lx,Ly,Lz))
+    halos_mom=halos_mom[mass_indx]
+    norm_halos_mom=skl.normalize(halos_mom)
+    halos=np.column_stack((Xc,Yc,Zc,norm_halos_mom))
+    # -----------------
+    
+    #grid=np.zeros((grid_nodes,grid_nodes,grid_nodes))
+    store_spin=[]
+    for i in range(len(Xc)):
+       #Create index related to the eigenvector bins
+        grid_index_x=mth.trunc(halos[i,0]*Xc_mult-Xc_minus)      
+        grid_index_y=mth.trunc(halos[i,1]*Yc_mult-Yc_minus) 
+        grid_index_z=mth.trunc(halos[i,2]*Zc_mult-Zc_minus) 
+        #calculate dot product and bin
+        if (mask[grid_index_x,grid_index_y,grid_index_z]==2):#condition includes recon_vecs_unnorm so that I may normalize the vectors which are being processed
+            spin_dot=np.inner(halos[i,3:6],recon_vecs[grid_index_x,grid_index_y,grid_index_z,:]) 
+            store_spin.append(spin_dot)
+    
+    del halos
+    store_spin=np.asarray(store_spin) 
+    costheta=abs(store_spin)
+    #in terms of pixels
+    pxl_length_gauss=1.*s/(2*fnl_val)*grid_nodes
+    #in terms of Mpc/h
+    std_dev_phys=pxl_length_gauss*(1.*sim_sz/grid_nodes)
+          
+    #Correlation 
+    mean_val=np.mean(costheta)
+    #bootstrap resampling error
+    runs=200+mass_bin*300
+    a=np.random.randint(low=0,high=len(costheta),size=(runs,len(costheta)))
+    mean_set=np.mean(costheta[a],axis=1)
+    del a
+    del costheta
+
+    print('MLE=%s +-%s'%(round(mean_val,4),round(np.std(mean_set),4)))
+    
+    
