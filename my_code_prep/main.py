@@ -5,23 +5,27 @@ import math as mth
 import h5py
 import sklearn.preprocessing as skl
 
-sim_sz=60         #Mpc/h
-grid_nodes=200  #Density grid resolution
-smooth_scl=3.5    #Mpc/h
-#Symbolize variables and specify function
+sim_sz=60           #Size of simulation in physical units Mpc/h cubed
+grid_nodes=200      #Density Field grid resolution
+smooth_scl=3.5      #Smoothing scale in physical units Mpc/h
+tot_mass_bins=4     #Number of Halo mass bins
+particles_filt=500  #Halos to filter out based on number of particles, ONLY for Dot Product Spin-LSS(SECTION 5.)
+Mass_res=1.35*10**8 #Bolchoi particle mass as per, https://arxiv.org/pdf/1002.3660.pdf
 
-f=h5py.File("/import/oth3/ajib0457/Peng_test_data_run/cat_reform/bolchoi_DTFE_rockstar_box_%scubed_xyz_vxyz_jxyz_m_r.h5"%sim_sz, 'r')#xyz vxvyvz jxjyjz & Rmass & Rvir: Halo radius (kpc/h comoving).
-data=f['/halo'][:]
+#Load Bolchoi Simulation Catalogue, ONLY filtered for X,Y,Z=<sim_sz
+f=h5py.File("/import/oth3/ajib0457/Peng_test_data_run/cat_reform/bolchoi_DTFE_rockstar_box_%scubed_xyz_vxyz_jxyz_m_r.h5"%sim_sz, 'r')
+data=f['/halo'][:]#(Pos)XYZ(Mpc/h), (Vel)VxVyVz(km/s), (Ang. Mom)JxJyJz((Msun/h)*(Mpc/h)*km/s), (Vir. Mass)Mvir(Msun/h) & (Vir. Rad)Rvir(kpc/h) 
 f.close()
 
-Xc=data[:,0]
-Yc=data[:,1]
-Zc=data[:,2]
-h_mass=data[:,9]
+Xc=data[:,0]#halo X coordinates
+Yc=data[:,1]#halo Y coordinates
+Zc=data[:,2]#halo Z coordinates
+h_mass=data[:,9]#halo Virial Mass
  
 halos=np.column_stack((Xc,Yc,Zc))
 
-#pre-binning for Halos ----------
+# SECTION 1. Density field creation ------------------------------------------------
+#Manual technique to bin halos within a 3D Matrix
 Xc_min=np.min(Xc)
 Xc_max=np.max(Xc)
 Yc_min=np.min(Yc)
@@ -36,19 +40,17 @@ Zc_mult=grid_nodes/(Zc_max-Zc_min)
 Xc_minus=Xc_min*grid_nodes/(Xc_max-Xc_min)+0.0000001
 Yc_minus=Yc_min*grid_nodes/(Yc_max-Yc_min)+0.0000001
 Zc_minus=Zc_min*grid_nodes/(Zc_max-Zc_min)+0.0000001
-#--------------------------------
 
-#grid=np.zeros((grid_nodes,grid_nodes,grid_nodes))
 image=np.zeros((grid_nodes,grid_nodes,grid_nodes))
 for i in range(len(Xc)):
    #Create index related to the eigenvector bins
     grid_index_x=mth.trunc(halos[i,0]*Xc_mult-Xc_minus)      
     grid_index_y=mth.trunc(halos[i,1]*Yc_mult-Yc_minus) 
     grid_index_z=mth.trunc(halos[i,2]*Zc_mult-Zc_minus)   
-    image[grid_index_x,grid_index_y,grid_index_z]+=h_mass[i] 
-
-img_x,img_y,img_z=np.shape(image)
-
+    image[grid_index_x,grid_index_y,grid_index_z]+=h_mass[i]#Add halo mass to coinciding pixel 
+#END SECTION-------------------------------------------------------------------------
+    
+# SECTION 2. Create Hessian ---------------------------------------------------------------------------------------
 X,Y,Z,s=symbols('X Y Z s')
 h=(1/sqrt(2*pi*s*s))**(3)*exp(-1/(2*s*s)*(Y**2+X**2+Z**2))
 #take second partial derivatives as per Hessian 
@@ -68,20 +70,20 @@ fzy=lambdify((X,Y,Z,s),hprimezy,'numpy')
 #3d meshgrid for each kernel and evaluate 6 partial derivatives to generate 9 kernels
 
 #Kernal settings
-s=1.0*smooth_scl/sim_sz*grid_nodes
-kern_x,kern_y,kern_z=img_x,img_y,img_z #kernel size
-in_val,fnl_val=-grid_nodes/2,grid_nodes/2
+img_x,img_y,img_z=np.shape(image)
+s=1.0*smooth_scl/sim_sz*grid_nodes# s- standard deviation of Kernel, converted from Mpc/h into number of pixels
+in_val,fnl_val=-grid_nodes/2,grid_nodes/2#Boundary of kernel
 
-#Kernel generator
-X,Y,Z=np.meshgrid(np.linspace(in_val,fnl_val,kern_y),np.linspace(in_val,fnl_val,kern_x),np.linspace(in_val,fnl_val,kern_z))
-dxx=fxx(X,Y,Z,s)
+#Kernel generator: The above lines from beginning SECTION 2. have analytically taken the second derivative of the 3D gaussian 'h' 
+X,Y,Z=np.meshgrid(np.linspace(in_val,fnl_val,img_x),np.linspace(in_val,fnl_val,img_y),np.linspace(in_val,fnl_val,img_z))
+dxx=fxx(X,Y,Z,s)#Now generate kernel for each unique hessian term
 dxy=fxy(X,Y,Z,s)
 dyy=fyy(X,Y,Z,s)
 dzz=fzz(X,Y,Z,s)
 dzx=fzx(X,Y,Z,s)
 dzy=fzy(X,Y,Z,s)
    
-#shift kernel to 0,0
+#shift kernels to make periodic 
 dxx=np.roll(dxx,int(img_x/2),axis=0)
 dxx=np.roll(dxx,int(img_y/2),axis=1)
 dxx=np.roll(dxx,int(img_z/2),axis=2)
@@ -100,7 +102,7 @@ dzx=np.roll(dzx,int(img_z/2),axis=2)
 dzy=np.roll(dzy,int(img_x/2),axis=0)
 dzy=np.roll(dzy,int(img_y/2),axis=1)
 dzy=np.roll(dzy,int(img_z/2),axis=2)
-#fft 6 kernels
+#fft 6 kernels & density field
 fft_dxx=np.fft.fftn(dxx)
 fft_dxy=np.fft.fftn(dxy)
 fft_dyy=np.fft.fftn(dyy)
@@ -123,47 +125,44 @@ ifft_dzz=np.reshape(ifft_dzz,(np.size(ifft_dzz),1))
 ifft_dzx=np.reshape(ifft_dzx,(np.size(ifft_dzx),1))
 ifft_dzy=np.reshape(ifft_dzy,(np.size(ifft_dzy),1))
 #create Hessian
-hessian=np.column_stack((ifft_dxx,ifft_dxy,ifft_dzx,ifft_dxy,ifft_dyy,ifft_dzy,ifft_dzx,ifft_dzy,ifft_dzz))
-   
-del ifft_dxx
+hessian=np.column_stack((ifft_dxx,ifft_dxy,ifft_dzx,ifft_dxy,ifft_dyy,ifft_dzy,ifft_dzx,ifft_dzy,ifft_dzz))  
+del ifft_dxx# These delete variables which are no longer needed, just to save some memory
 del ifft_dxy
 del ifft_dyy
 del ifft_dzz
 del ifft_dzx
 del ifft_dzy
+hessian=np.reshape(hessian,(grid_nodes**3,3,3))
+#END SECTION----------------------------------------------------------------------------------------------------
 
-hessian=np.reshape(hessian,(grid_nodes**3,3,3))#change to 3,3 for 3d and 1,1 for 1d
-#calculate eigenvalues and eigenvectors
+# SECTION 3. Calculate and reorder eigenpairs----------------------------------------------
 eig_vals_vecs=np.linalg.eig(hessian)
 del hessian
-
-#extract eigenvalues
+#Eigenvalues 
 eigvals_unsorted=eig_vals_vecs[0]
 eigvals=np.sort(eigvals_unsorted)
-#extract eigenvectors
-eigvecs=eig_vals_vecs[1]
 eig_one=eigvals[:,2]
 eig_two=eigvals[:,1]
 eig_three=eigvals[:,0]
-
-#link eigenvalues as keys to eigenvectors as values inside dictionary    
+eigvals_unsorted=eigvals_unsorted.flatten()
+#Eigenvectors
+eigvecs=eig_vals_vecs[1]
 vec_arr_num,vec_row,vec_col=np.shape(eigvecs)
 values=np.reshape(eigvecs.transpose(0,2,1),(vec_row*vec_arr_num,vec_col))#orient eigenvectors so that each row is an eigenvector
+#END SECTION------------------------------------------------------------------------------
 
-eigvals_unsorted=eigvals_unsorted.flatten()
-vecsvals=np.column_stack((eigvals_unsorted,values))
-
-lss=['filament','sheet','void','cluster']#Choose which LSS you would like to get classified
-def lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three):
-    
-    ####Classifier#### 
+# SECTION 4. Classify Large scale structure--------------------------------------------------------------------
+lss=['filament','sheet','void','cluster']#which LSS to output mask & eigenpairs for
+def lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three):   
     '''
     This is the classifier function which takes input:
     
     lss: the labels of Large scale structure which will be identified pixel by pixel and also eigenvectors 
     will be retrieved if applicable.
     
-    vecsvals: These are the eigenvalues and eigevector pairs which correspond row by row.
+    eigvals_unsorted: flattened eigenvalues of entire simulation
+    
+    values: eigenvectors of entire simulation reshaped into row vectors
 
     eig_one,two and three: These are the isolated eigenvalues 
     
@@ -173,11 +172,13 @@ def lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three):
     
     mask_fnl: array prescribing 0-void, 1-sheet, 2-filament and 3-cluster
     '''
-    eig_fnl=np.zeros((grid_nodes**3,4))
+    eig_fnl=np.zeros((grid_nodes**3,4))#first column will store all relevent eigenvalues and last 3 columns will store eigenvectors
     mask_fnl=np.zeros((grid_nodes**3))
-    for i in lss:
-        vecsvals=np.column_stack((eigvals_unsorted,values))
-        recon_img=np.zeros([grid_nodes**3])
+    for i in lss:#Will loop once for each LSS chosen using 'lss' list
+        vecsvals=np.column_stack((eigvals_unsorted,values))#Redefine vecsvals for each iteration
+        vecsvals=np.reshape(vecsvals,(grid_nodes**3,3,4))#Each pixel is 3x4 where first column is eigenvalues and next 3 col are eigenvectors
+        recon_img=np.zeros([grid_nodes**3])#Mask used along with below conditions to mask out pixels 
+        #Conditions for each LSS
         if (i=='void'):
             recon_filt_one=np.where(eig_three>0)
             recon_filt_two=np.where(eig_two>0)
@@ -194,9 +195,7 @@ def lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three):
             recon_filt_one=np.where(eig_three<0)
             recon_filt_two=np.where(eig_two<0)
             recon_filt_three=np.where(eig_one<0)
-        
-        #LSS FILTER#
-        
+                
         recon_img[recon_filt_one]=1
         recon_img[recon_filt_two]=recon_img[recon_filt_two]+1
         recon_img[recon_filt_three]=recon_img[recon_filt_three]+1  
@@ -204,132 +203,119 @@ def lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three):
         del recon_filt_two
         del recon_filt_three
         recon_img=recon_img.flatten()
-        recon_img=recon_img.astype(np.int8)
-        mask=(recon_img !=3)#Up to this point, a mask is created to identify where there are NO filaments...
+        recon_img=recon_img.astype(np.int8)#Just done to reduce memory
+        mask=(recon_img !=3)
         mask_true=(recon_img ==3)
         del recon_img
-        vecsvals=np.reshape(vecsvals,(grid_nodes**3,3,4))
-        
-        
-        #Find relevent eigpairs
-        if (i=='void'):#There is no appropriate axis of a void?
-            mask_fnl[mask_true]=0
+                
+        #Find and store relevent eigpairs
+        if (i=='void'):
+            mask_fnl[mask_true]=0#Identify final mask void-0
             del mask_true
+            del mask
             
         if (i=='sheet'):
-            vecsvals[mask,:,:]=np.ones((3,4))*9#...which are then converted into -9 at this point
+            vecsvals[mask,:,:]=np.ones((3,4))*9#wipe out all pixels which are not sheet
             del mask
-            fnd_prs=np.where(vecsvals[:,:,0]<0)#find LSS axis
-            eig_fnl[fnd_prs[0],:]=vecsvals[fnd_prs[0],fnd_prs[1],:]
-            mask_fnl[mask_true]=1
+            fnd_prs=np.where(vecsvals[:,:,0]<0)#Find where eigenvectors which are perpendicular to sheet plane
+            eig_fnl[fnd_prs[0],:]=vecsvals[fnd_prs[0],fnd_prs[1],:]#save relevent eigpairs into final output array
+            mask_fnl[mask_true]=1#Identify final mask sheet-1
             del mask_true
 
         if (i=='filament'):
-            vecsvals[mask,:,:]=np.ones((3,4))*-9#...which are then converted into -9 at this point
+            vecsvals[mask,:,:]=np.ones((3,4))*-9#wipe out all pixels which are not filament
             del mask
-            fnd_prs=np.where(vecsvals[:,:,0]>=0)#find LSS axis
-            eig_fnl[fnd_prs[0],:]=vecsvals[fnd_prs[0],fnd_prs[1],:]
-            mask_fnl[mask_true]=2
+            fnd_prs=np.where(vecsvals[:,:,0]>=0)#Find e3 eigenvectors using eigenvalues
+            eig_fnl[fnd_prs[0],:]=vecsvals[fnd_prs[0],fnd_prs[1],:]#save relevent eigpairs into final output array
+            mask_fnl[mask_true]=2#Identify final mask filament-2
             del mask_true
             
-        if (i=='cluster'):#There is no appropriate axis of a void?
-            mask_fnl[mask_true]=3
+        if (i=='cluster'):
+            mask_fnl[mask_true]=3#Identify final mask cluster-3
             del mask_true            
-        
+            del mask
+            
     return eig_fnl,mask_fnl  
-    
 eig_fnl,mask_fnl= lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three)#Function run
 del eig_three
 del eig_two
 del eig_one  
-del values  
+del values
+#END SECTION-----------------------------------------------------------------------------------------------------
 
-recon_vecs_x=eig_fnl[:,1]
-recon_vecs_y=eig_fnl[:,2]
-recon_vecs_z=eig_fnl[:,3]
-
-#Dot Product
-recon_vecs_flt_unnorm=np.column_stack((recon_vecs_x,recon_vecs_y,recon_vecs_z))
-del recon_vecs_x
-del recon_vecs_y
-del recon_vecs_z
-mask=np.reshape(mask_fnl,(grid_nodes,grid_nodes,grid_nodes))
-
-recon_vecs_flt_norm=skl.normalize(recon_vecs_flt_unnorm)#I should not normalize becauase they are already normalized and also the classifier (9) mask will be ruined
-recon_vecs=np.reshape(recon_vecs_flt_norm,(grid_nodes,grid_nodes,grid_nodes,3))#Three for the 3 vector components
+# SECTION 5. Take Dot Product of Spin-LSS------------------------------------------------------------------------
+mask=np.reshape(mask_fnl,(grid_nodes,grid_nodes,grid_nodes))#Reshape mask_fnl
+  
+recon_vecs_flt_unnorm=eig_fnl[:,1:4]#take eigenvectors from eig_fnl
+recon_vecs_flt_norm=skl.normalize(recon_vecs_flt_unnorm)#normalize eigenvectors to make sure.
+recon_vecs=np.reshape(recon_vecs_flt_norm,(grid_nodes,grid_nodes,grid_nodes,3))#Reshape eigenvectors
 del recon_vecs_flt_norm
-recon_vecs_unnorm=np.reshape(recon_vecs_flt_unnorm,(grid_nodes,grid_nodes,grid_nodes,3))#raw eigenvectors along with (9)-filled rows which represent blank vectors
 del recon_vecs_flt_unnorm
-# -----------------
-
-tot_mass_bins=4
-
-partcl_500=np.where((data[:,9]/(1.35*10**8))>=500)#filter out halos with <500 particles
-data=data[partcl_500]
+#'data' format reminder: (Pos)XYZ(Mpc/h), (Vel)VxVyVz(km/s), (Ang. Mom)JxJyJz((Msun/h)*(Mpc/h)*km/s), (Vir. Mass)Mvir(Msun/h) & (Vir. Rad)Rvir(kpc/h)
+partcl_halo_flt=np.where((data[:,9]/(Mass_res))>=particles_filt)#filter for halos with <N particles
+data=data[partcl_halo_flt]#Filter out halos
 halo_mass=data[:,9]
 log_halo_mass=np.log10(halo_mass)#convert into log(M)
-mass_intvl=(np.max(log_halo_mass)-np.min(log_halo_mass))/tot_mass_bins
+mass_intvl=(np.max(log_halo_mass)-np.min(log_halo_mass))/tot_mass_bins#log_mass value used to find mass interval
+#Positions
+Xc=data[:,0]
+Yc=data[:,1]
+Zc=data[:,2]
+#Angular momenta
+Lx=data[:,6]
+Ly=data[:,7]
+Lz=data[:,8]
 
-
+results=np.zeros((tot_mass_bins,4))# [Mass_min, Mass_max, Value, Error] 
 for mass_bin in range(tot_mass_bins):
     
-    low_int_mass=np.min(log_halo_mass)+mass_intvl*mass_bin
-    hi_int_mass=low_int_mass+mass_intvl
+    low_int_mass=np.min(log_halo_mass)+mass_intvl*mass_bin#Calculate mass interval
+    hi_int_mass=low_int_mass+mass_intvl#Calculate mass interval
+    results[mass_bin,0]=low_int_mass#Store mass interval
+    results[mass_bin,1]=hi_int_mass#Store mass interval
+   
+    #Create mask to filter out halos within mass interval
     mass_mask=np.zeros(len(log_halo_mass))
-    loint=np.where(log_halo_mass>=low_int_mass)#Change these two numbers as according to the above intervals
-    hiint=np.where(log_halo_mass<hi_int_mass)#Change these two numbers as according to the above intervals
+    loint=np.where(log_halo_mass>=low_int_mass)
+    hiint=np.where(log_halo_mass<hi_int_mass)
     mass_mask[loint]=1
     mass_mask[hiint]=mass_mask[hiint]+1
     mass_indx=np.where(mass_mask==2)
     
-    #Angular momentum
-    Lx=data[:,6]
-    Ly=data[:,7]
-    Lz=data[:,8]
-    #Positions
-    Xc=data[:,0]
+    #Positions & Angular Momenta filtered for mass interval
     Xc=Xc[mass_indx]
-    Yc=data[:,1]
     Yc=Yc[mass_indx]
-    Zc=data[:,2]
     Zc=Zc[mass_indx]
-    
-    #normalized angular momentum vectors v1
     halos_mom=np.column_stack((Lx,Ly,Lz))
     halos_mom=halos_mom[mass_indx]
-    norm_halos_mom=skl.normalize(halos_mom)
-    halos=np.column_stack((Xc,Yc,Zc,norm_halos_mom))
-    # -----------------
     
-    #grid=np.zeros((grid_nodes,grid_nodes,grid_nodes))
-    store_spin=[]
+    norm_halos_mom=skl.normalize(halos_mom)#Normalize Angular Momenta
+    halos=np.column_stack((Xc,Yc,Zc,norm_halos_mom))
+       
+    store_spin=[]#Store Dot Product of spin-LSS
     for i in range(len(Xc)):
-       #Create index related to the eigenvector bins
+       #Create index from halo coordinates
         grid_index_x=mth.trunc(halos[i,0]*Xc_mult-Xc_minus)      
         grid_index_y=mth.trunc(halos[i,1]*Yc_mult-Yc_minus) 
         grid_index_z=mth.trunc(halos[i,2]*Zc_mult-Zc_minus) 
-        #calculate dot product and bin
-        if (mask[grid_index_x,grid_index_y,grid_index_z]==2):#condition includes recon_vecs_unnorm so that I may normalize the vectors which are being processed
+        
+        if (mask[grid_index_x,grid_index_y,grid_index_z]==2):#Calculate Dot Product for filament-2
             spin_dot=np.inner(halos[i,3:6],recon_vecs[grid_index_x,grid_index_y,grid_index_z,:]) 
             store_spin.append(spin_dot)
     
     del halos
     store_spin=np.asarray(store_spin) 
-    costheta=abs(store_spin)
-    #in terms of pixels
-    pxl_length_gauss=1.*s/(2*fnl_val)*grid_nodes
-    #in terms of Mpc/h
-    std_dev_phys=pxl_length_gauss*(1.*sim_sz/grid_nodes)
+    costheta=abs(store_spin)#Take absolute value as only Alignment counts.
           
-    #Correlation 
-    mean_val=np.mean(costheta)
-    #bootstrap resampling error
+    results[mass_bin,2]=np.mean(costheta)#Alignment value calc. and store
+    
+    #Calculating error using bootstrap resampling
     runs=200+mass_bin*300
     a=np.random.randint(low=0,high=len(costheta),size=(runs,len(costheta)))
     mean_set=np.mean(costheta[a],axis=1)
     del a
     del costheta
-
-    print('MLE=%s +-%s'%(round(mean_val,4),round(np.std(mean_set),4)))
+    results[mass_bin,3]=np.std(mean_set)#Store 1sigma error
     
-    
+print(results)    
+#END SECTION & CODE---------------------------------------------------------------------------------------------------
