@@ -49,7 +49,7 @@ for i in range(len(Xc)):
     grid_index_z=mth.trunc(halos[i,2]*Zc_mult-Zc_minus)   
     image[grid_index_x,grid_index_y,grid_index_z]+=h_mass[i]#Add halo mass to coinciding pixel 
 #END SECTION-------------------------------------------------------------------------
-    
+  
 # SECTION 2. Create Hessian ---------------------------------------------------------------------------------------
 X,Y,Z,s=symbols('X Y Z s')
 h=(1/sqrt(2*pi*s*s))**(3)*exp(-1/(2*s*s)*(Y**2+X**2+Z**2))
@@ -253,22 +253,23 @@ del recon_vecs_flt_norm
 del recon_vecs_flt_unnorm
 #'data' format reminder: (Pos)XYZ(Mpc/h), (Vel)VxVyVz(km/s), (Ang. Mom)JxJyJz((Msun/h)*(Mpc/h)*km/s), (Vir. Mass)Mvir(Msun/h) & (Vir. Rad)Rvir(kpc/h)
 partcl_halo_flt=np.where((data[:,9]/(Mass_res))>=particles_filt)#filter for halos with <N particles
-data=data[partcl_halo_flt]#Filter out halos
+data=data[partcl_halo_flt]#Filter out halos with <N particles
 halo_mass=data[:,9]
-log_halo_mass=np.log10(halo_mass)#convert into log(M)
+log_halo_mass=np.log10(halo_mass)#convert into log10(M)
 mass_intvl=(np.max(log_halo_mass)-np.min(log_halo_mass))/tot_mass_bins#log_mass value used to find mass interval
-#Positions
-Xc=data[:,0]
-Yc=data[:,1]
-Zc=data[:,2]
-#Angular momenta
-Lx=data[:,6]
-Ly=data[:,7]
-Lz=data[:,8]
 
 results=np.zeros((tot_mass_bins,4))# [Mass_min, Mass_max, Value, Error] 
 for mass_bin in range(tot_mass_bins):
     
+    #Positions
+    Xc=data[:,0]#I must redefine these at each iteration since I am filtering them for each mass interval
+    Yc=data[:,1]
+    Zc=data[:,2]
+    #Angular momenta
+    Lx=data[:,6]
+    Ly=data[:,7]
+    Lz=data[:,8]
+
     low_int_mass=np.min(log_halo_mass)+mass_intvl*mass_bin#Calculate mass interval
     hi_int_mass=low_int_mass+mass_intvl#Calculate mass interval
     results[mass_bin,0]=low_int_mass#Store mass interval
