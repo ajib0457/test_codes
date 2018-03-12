@@ -4,24 +4,24 @@ from sympy import *
 import math as mth
 import h5py
 import sklearn.preprocessing as skl
+from plotter_funcs import * 
 
 sim_sz=60           #Size of simulation in physical units Mpc/h cubed
 grid_nodes=200      #Density Field grid resolution
 smooth_scl=3.5      #Smoothing scale in physical units Mpc/h
 tot_mass_bins=4     #Number of Halo mass bins
-particles_filt=500  #Halos to filter out based on number of particles, ONLY for Dot Product Spin-LSS(SECTION 5.)
+particles_filt=300  #Halos to filter out based on number of particles, ONLY for Dot Product Spin-LSS(SECTION 5.)
 Mass_res=1.35*10**8 #Bolchoi particle mass as per, https://arxiv.org/pdf/1002.3660.pdf
 
 #Load Bolchoi Simulation Catalogue, ONLY filtered for X,Y,Z=<sim_sz
 f=h5py.File("/import/oth3/ajib0457/Peng_test_data_run/cat_reform/bolchoi_DTFE_rockstar_box_%scubed_xyz_vxyz_jxyz_m_r.h5"%sim_sz, 'r')
-data=f['/halo'][:]#(Pos)XYZ(Mpc/h), (Vel)VxVyVz(km/s), (Ang. Mom)JxJyJz((Msun/h)*(Mpc/h)*km/s), (Vir. Mass)Mvir(Msun/h) & (Vir. Rad)Rvir(kpc/h) 
+data=f['/halo'][:]#data array: (Pos)XYZ(Mpc/h), (Vel)VxVyVz(km/s), (Ang. Mom)JxJyJz((Msun/h)*(Mpc/h)*km/s), (Vir. Mass)Mvir(Msun/h) & (Vir. Rad)Rvir(kpc/h) 
 f.close()
 
 Xc=data[:,0]#halo X coordinates
 Yc=data[:,1]#halo Y coordinates
 Zc=data[:,2]#halo Z coordinates
 h_mass=data[:,9]#halo Virial Mass
- 
 halos=np.column_stack((Xc,Yc,Zc))
 
 # SECTION 1. Density field creation ------------------------------------------------
@@ -49,7 +49,14 @@ for i in range(len(Xc)):
     grid_index_z=mth.trunc(halos[i,2]*Zc_mult-Zc_minus)   
     image[grid_index_x,grid_index_y,grid_index_z]+=h_mass[i]#Add halo mass to coinciding pixel 
 #END SECTION-------------------------------------------------------------------------
-  
+    
+# **IGNORE** SECTION 1.1 Plot scatter, velocity & AM vector scatter----------------------------
+slc=160             # 0 - grid_nodes  
+plane=1             #X-0, Y-1, Z-2   
+plane_thickness=5 #Mpc/h
+scatter_plot(Xc,Yc,Zc,slc,plane,grid_nodes,plane_thickness,sim_sz)
+#-----------------------------------------------------------------------------------
+
 # SECTION 2. Create Hessian ---------------------------------------------------------------------------------------
 X,Y,Z,s=symbols('X Y Z s')
 h=(1/sqrt(2*pi*s*s))**(3)*exp(-1/(2*s*s)*(Y**2+X**2+Z**2))
@@ -126,18 +133,16 @@ ifft_dzx=np.reshape(ifft_dzx,(np.size(ifft_dzx),1))
 ifft_dzy=np.reshape(ifft_dzy,(np.size(ifft_dzy),1))
 #create Hessian
 hessian=np.column_stack((ifft_dxx,ifft_dxy,ifft_dzx,ifft_dxy,ifft_dyy,ifft_dzy,ifft_dzx,ifft_dzy,ifft_dzz))  
-del ifft_dxx# These delete variables which are no longer needed, just to save some memory
-del ifft_dxy
-del ifft_dyy
-del ifft_dzz
-del ifft_dzx
-del ifft_dzy
 hessian=np.reshape(hessian,(grid_nodes**3,3,3))
 #END SECTION----------------------------------------------------------------------------------------------------
 
+# **IGNORE** SECTION 2.1 Plot scatter,smoothed, eigvals, classification mask,color scatter, table with halo-classif ratios----------------------------
+scl_plt=20 #nth root scaling of density field
+smoothed_density_field(grid_nodes,slc,smooth_scl,in_val,fnl_val,s,image,plane,scl_plt)
+#-----------------------------------------------------------------------------------
+
 # SECTION 3. Calculate and reorder eigenpairs----------------------------------------------
 eig_vals_vecs=np.linalg.eig(hessian)
-del hessian
 #Eigenvalues 
 eigvals_unsorted=eig_vals_vecs[0]
 eigvals=np.sort(eigvals_unsorted)
@@ -199,9 +204,7 @@ def lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three):
         recon_img[recon_filt_one]=1
         recon_img[recon_filt_two]=recon_img[recon_filt_two]+1
         recon_img[recon_filt_three]=recon_img[recon_filt_three]+1  
-        del recon_filt_one
-        del recon_filt_two
-        del recon_filt_three
+
         recon_img=recon_img.flatten()
         recon_img=recon_img.astype(np.int8)#Just done to reduce memory
         mask=(recon_img !=3)
@@ -211,46 +214,39 @@ def lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three):
         #Find and store relevent eigpairs
         if (i=='void'):
             mask_fnl[mask_true]=0#Identify final mask void-0
-            del mask_true
-            del mask
             
         if (i=='sheet'):
             vecsvals[mask,:,:]=np.ones((3,4))*9#wipe out all pixels which are not sheet
-            del mask
+
             fnd_prs=np.where(vecsvals[:,:,0]<0)#Find where eigenvectors which are perpendicular to sheet plane
             eig_fnl[fnd_prs[0],:]=vecsvals[fnd_prs[0],fnd_prs[1],:]#save relevent eigpairs into final output array
             mask_fnl[mask_true]=1#Identify final mask sheet-1
-            del mask_true
 
         if (i=='filament'):
             vecsvals[mask,:,:]=np.ones((3,4))*-9#wipe out all pixels which are not filament
-            del mask
+
             fnd_prs=np.where(vecsvals[:,:,0]>=0)#Find e3 eigenvectors using eigenvalues
             eig_fnl[fnd_prs[0],:]=vecsvals[fnd_prs[0],fnd_prs[1],:]#save relevent eigpairs into final output array
             mask_fnl[mask_true]=2#Identify final mask filament-2
-            del mask_true
             
         if (i=='cluster'):
             mask_fnl[mask_true]=3#Identify final mask cluster-3
-            del mask_true            
-            del mask
             
     return eig_fnl,mask_fnl  
 eig_fnl,mask_fnl= lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three)#Function run
-del eig_three
-del eig_two
-del eig_one  
-del values
+mask=np.reshape(mask_fnl,(grid_nodes,grid_nodes,grid_nodes))#Reshape mask_fnl
 #END SECTION-----------------------------------------------------------------------------------------------------
 
+# **IGNORE** SECTION 4.1 Plot scatter,smoothed, eigvals, classification mask,color scatter, table with halo-classif ratios----------------------------
+classify_mask(mask,grid_nodes,slc,smooth_scl,plane)
+colorscatter_plt(data,mask,grid_nodes,slc,smooth_scl,plane,sim_sz,plane_thickness,Mass_res,particles_filt,Xc_mult,Xc_minus,Yc_mult,Yc_minus,Zc_mult,Zc_minus)
+#-----------------------------------------------------------------------------------
+
 # SECTION 5. Take Dot Product of Spin-LSS------------------------------------------------------------------------
-mask=np.reshape(mask_fnl,(grid_nodes,grid_nodes,grid_nodes))#Reshape mask_fnl
-  
 recon_vecs_flt_unnorm=eig_fnl[:,1:4]#take eigenvectors from eig_fnl
 recon_vecs_flt_norm=skl.normalize(recon_vecs_flt_unnorm)#normalize eigenvectors to make sure.
 recon_vecs=np.reshape(recon_vecs_flt_norm,(grid_nodes,grid_nodes,grid_nodes,3))#Reshape eigenvectors
-del recon_vecs_flt_norm
-del recon_vecs_flt_unnorm
+
 #'data' format reminder: (Pos)XYZ(Mpc/h), (Vel)VxVyVz(km/s), (Ang. Mom)JxJyJz((Msun/h)*(Mpc/h)*km/s), (Vir. Mass)Mvir(Msun/h) & (Vir. Rad)Rvir(kpc/h)
 partcl_halo_flt=np.where((data[:,9]/(Mass_res))>=particles_filt)#filter for halos with <N particles
 data=data[partcl_halo_flt]#Filter out halos with <N particles
@@ -303,8 +299,7 @@ for mass_bin in range(tot_mass_bins):
         if (mask[grid_index_x,grid_index_y,grid_index_z]==2):#Calculate Dot Product for filament-2
             spin_dot=np.inner(halos[i,3:6],recon_vecs[grid_index_x,grid_index_y,grid_index_z,:]) 
             store_spin.append(spin_dot)
-    
-    del halos
+
     store_spin=np.asarray(store_spin) 
     costheta=abs(store_spin)#Take absolute value as only Alignment counts.
           
@@ -314,9 +309,12 @@ for mass_bin in range(tot_mass_bins):
     runs=200+mass_bin*300
     a=np.random.randint(low=0,high=len(costheta),size=(runs,len(costheta)))
     mean_set=np.mean(costheta[a],axis=1)
-    del a
-    del costheta
     results[mass_bin,3]=np.std(mean_set)#Store 1sigma error
     
 print(results)    
 #END SECTION & CODE---------------------------------------------------------------------------------------------------
+
+# **IGNORE** SECTION 5.1 Plot correlation----------------------------
+alignment_plt(grid_nodes,results)
+vector_scatter(data,mask,recon_vecs,grid_nodes,sim_sz,particles_filt,slc,Xc_mult,Xc_minus,Yc_mult,Yc_minus,Zc_mult,Zc_minus,plane_thickness)
+#-----------------------------------------------------------------------------------
