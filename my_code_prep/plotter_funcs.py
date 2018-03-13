@@ -22,15 +22,15 @@ def scatter_plot(Xc,Yc,Zc,slc,plane,grid_nodes,plane_thickness,sim_sz):
     partcls = np.delete(partcls, (0), axis=0)
     
     #Plotting
-    fig, ax = plt.subplots(figsize=(20,20),dpi=100)
+    fig, ax = plt.subplots(figsize=(14,14),dpi=100)
     ax.scatter(partcls[:,0],partcls[:,2],c='r')
     ax.set_xlim([0,sim_sz])
     ax.set_ylim([0,sim_sz]) 
     plt.xlabel('x[Mpc/h]') 
     plt.ylabel('y[Mpc/h]')
-  
+    plt.title('Scatter plot')
     ax.grid(True)
-    plt.savefig('bolchoi_halosall_gd%d_slc%d_thck%sMpc_%splane.png' %(grid_nodes,slc,plane_thickness,plane))
+    plt.savefig('SCATTER_PLOT_gd%d_slc%d_thck%sMpc_%splane.png' %(grid_nodes,slc,plane_thickness,plane))
     
     return
 
@@ -51,15 +51,15 @@ def smoothed_density_field(grid_nodes,slc,smooth_scl,in_val,fnl_val,s,image,plan
     fft_img=np.fft.fftn(image)
     smth_img=np.fft.ifftn(np.multiply(fft_kernel,fft_img)).real
     
-    plt.figure(figsize=(20,20),dpi=100)
-   
-    plt.title('classified image')
-    if plane==0: dn_fl_plt=plt.imshow(np.power(np.rot90(smth_img[slc,:,:],1),1./scl_plt),extent=[0,grid_nodes,0,grid_nodes])
-    if plane==1: dn_fl_plt=plt.imshow(np.power(np.rot90(smth_img[:,slc,:],1),1./scl_plt))
-    if plane==2: dn_fl_plt=plt.imshow(np.power(np.rot90(smth_img[:,:,slc],1),1./scl_plt),extent=[0,grid_nodes,0,grid_nodes])
+    plt.figure(figsize=(14,14),dpi=100)
+    cmap = plt.get_cmap('jet')#This is where you can change the color scheme   
+    plt.title('Smoothed density field')
+    if plane==0: dn_fl_plt=plt.imshow(np.power(np.rot90(smth_img[slc,:,:],1),1./scl_plt), cmap=cmap,extent=[0,grid_nodes,0,grid_nodes])
+    if plane==1: dn_fl_plt=plt.imshow(np.power(np.rot90(smth_img[:,slc,:],1),1./scl_plt), cmap=cmap,extent=[0,grid_nodes,0,grid_nodes])
+    if plane==2: dn_fl_plt=plt.imshow(np.power(np.rot90(smth_img[:,:,slc],1),1./scl_plt), cmap=cmap,extent=[0,grid_nodes,0,grid_nodes])
     plt.colorbar(dn_fl_plt)
     
-    plt.savefig('bolchoi_smthden_gd%s_slc%s_smth%sMpc_%splane.png' %(grid_nodes,slc,smooth_scl,plane))
+    plt.savefig('SMOOTHED_DENSITY_FIELD_gd%s_slc%s_smth%sMpc_%splane.png' %(grid_nodes,slc,smooth_scl,plane))
     
     return
 
@@ -96,17 +96,18 @@ def classify_mask(mask,grid_nodes,slc,smooth_scl,plane):
         return mcolors.LinearSegmentedColormap(cmap.name + "_%d"%N, cdict, 1024)
     
     #Classifier: This subplot must be first so that the two functions above will help to discretise the color scheme and color bar
-    ax=plt.subplot2grid((1,1), (0,0))  
-    plt.title('Classifier')
-    #plt.xlabel('z')
-    #plt.ylabel('x')
+    
+    fig, ax = plt.subplots(figsize=(14,14),dpi=100) 
+    plt.title('LSS Classification')
+    plt.xlabel('grid x')
+    plt.ylabel('grid y')
     cmap = plt.get_cmap('jet')#This is where you can change the color scheme
     if plane==0: ax.imshow(np.rot90(mask[slc,:,:],1), interpolation='nearest', cmap=cmap,extent=[0,grid_nodes,0,grid_nodes])
     if plane==1: ax.imshow(np.rot90(mask[:,slc,:],1), interpolation='nearest', cmap=cmap,extent=[0,grid_nodes,0,grid_nodes])
     if plane==2: ax.imshow(np.rot90(mask[:,:,slc],1), interpolation='nearest', cmap=cmap,extent=[0,grid_nodes,0,grid_nodes])
     colorbar_index(ncolors=4, cmap=cmap)
     
-    plt.savefig('bolchoi_recon_img_gd%d_slc%d_smth%sMpc_%splane.png' %(grid_nodes,slc,smooth_scl,plane))
+    plt.savefig('LSS_CLASSIFICATION_gd%d_slc%d_smth%sMpc_%splane.png' %(grid_nodes,slc,smooth_scl,plane))
     
     return
 
@@ -148,7 +149,7 @@ def colorscatter_plt(data,mask,grid_nodes,slc,smooth_scl,plane,sim_sz,plane_thic
     partcls = np.delete(partcls, (0), axis=0)
     
     #Plotting
-    fig, ax = plt.subplots(figsize=(15,15),dpi=100)
+    fig, ax = plt.subplots(figsize=(14,14),dpi=100)
     
     i=0#initiate mask for plot loop
     for color in ['red', 'green', 'blue','yellow']:
@@ -161,18 +162,19 @@ def colorscatter_plt(data,mask,grid_nodes,slc,smooth_scl,plane,sim_sz,plane_thic
     #ax.view_init(elev=0,azim=-90)#upon generating figure, usually have to rotate manually by 90 deg. clockwise 
     plt.xlabel('x[Mpc/h]') 
     plt.ylabel('y[Mpc/h]')
+    plt.title('Color Scatter')
     ax.legend()
     ax.grid(True)
     ax.set_xlim([0,sim_sz])
     ax.set_ylim([0,sim_sz])
-    plt.savefig('bolchoi_halocolor_gd%d_slc%d_thck%sMpc_vradius_%splane_%sparticles.png' %(grid_nodes,slc,plane_thickness,plane,particles_filt))
+    plt.savefig('COLOR_SCATTER_gd%d_slc%d_thck%sMpc_vradius_%splane_%sparticles.png' %(grid_nodes,slc,plane_thickness,plane,particles_filt))
     
     return
     
 def alignment_plt(grid_nodes,results):
     from matplotlib import pyplot as plt
     
-    plt.figure(figsize=(7,7),dpi=50)
+    plt.figure()
     
     ax2=plt.subplot2grid((1,1), (0,0))
     ax2.axhline(y=0.5, xmin=0, xmax=15, color = 'k',linestyle='--')
@@ -184,7 +186,7 @@ def alignment_plt(grid_nodes,results):
     plt.xlabel('log Mass[M_solar]')   
     plt.title('Spin-Filament')
     plt.legend(loc='upper right')
-    plt.savefig('fig_1_mean_grid_%s.png'%(grid_nodes))
+    plt.savefig('ALIGNMENT_PLOT_grid_%s.png'%(grid_nodes))
     
     return
 
@@ -197,8 +199,8 @@ def vector_scatter(data,mask,recon_vecs,grid_nodes,sim_sz,particles_filt,slc,Xc_
     import sklearn.preprocessing as skl
     import math as mth
      
-    x_cutout=100
-    z_cutout=100
+    x_cutout=sim_sz
+    z_cutout=sim_sz
     x,y,z=0,1,2
     box=np.max(data[:,0])#subset box length
     partcl_thkns=5#Thickness of the particle slice, Mpc
@@ -268,4 +270,4 @@ def vector_scatter(data,mask,recon_vecs,grid_nodes,sim_sz,particles_filt,slc,Xc_
     plt.ylabel('y[Mpc/h]')
     plt.title('%s filament axis'%len(fnl_halos_vecs))
     
-    plt.savefig('bolchoi_halovec_partcls%s_gd%d_slc%d_thck%sMpc_vel_AM_yplane_%s_%s_filament.png' %(particles_filt,grid_nodes,slc,plane_thickness,x_cutout,z_cutout))
+    plt.savefig('VECTOR_SCATTER_partcls%s_gd%d_slc%d_thck%sMpc_yplane_%s_%s_filament.png' %(particles_filt,grid_nodes,slc,plane_thickness,x_cutout,z_cutout))
