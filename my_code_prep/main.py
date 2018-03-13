@@ -14,7 +14,7 @@ particles_filt=300  #Halos to filter out based on number of particles, ONLY for 
 Mass_res=1.35*10**8 #Bolchoi particle mass as per, https://arxiv.org/pdf/1002.3660.pdf
 
 #Load Bolchoi Simulation Catalogue, ONLY filtered for X,Y,Z=<sim_sz
-f=h5py.File("/import/oth3/ajib0457/Peng_test_data_run/cat_reform/bolchoi_DTFE_rockstar_box_%scubed_xyz_vxyz_jxyz_m_r.h5"%sim_sz, 'r')
+f=h5py.File("bolchoi_DTFE_rockstar_box_%scubed_xyz_vxyz_jxyz_m_r.h5"%sim_sz, 'r')
 data=f['/halo'][:]#data array: (Pos)XYZ(Mpc/h), (Vel)VxVyVz(km/s), (Ang. Mom)JxJyJz((Msun/h)*(Mpc/h)*km/s), (Vir. Mass)Mvir(Msun/h) & (Vir. Rad)Rvir(kpc/h) 
 f.close()
 
@@ -58,15 +58,15 @@ scatter_plot(Xc,Yc,Zc,slc,plane,grid_nodes,plane_thickness,sim_sz)
 #-----------------------------------------------------------------------------------
 
 # SECTION 2. Create Hessian ---------------------------------------------------------------------------------------
-X,Y,Z,s=symbols('X Y Z s')
-h=(1/sqrt(2*pi*s*s))**(3)*exp(-1/(2*s*s)*(Y**2+X**2+Z**2))
+X,Y,Z,s=symbols('X Y Z s')#sympy feature needed to take derivative of Gaussian 'h'.
+h=(1/sqrt(2*pi*s*s))**(3)*exp(-1/(2*s*s)*(Y**2+X**2+Z**2))#Will differentiate this analytically dxx,dxy...
 #take second partial derivatives as per Hessian 
-hprimexx=h.diff(X,X)
-hprimexy=h.diff(X,Y)
-hprimeyy=h.diff(Y,Y)
-hprimezz=h.diff(Z,Z)
-hprimezx=h.diff(Z,X)
-hprimezy=h.diff(Z,Y)
+hprimexx=h.diff(X,X)#dxx
+hprimexy=h.diff(X,Y)#dxy
+hprimeyy=h.diff(Y,Y)#dyy
+hprimezz=h.diff(Z,Z)#dzz
+hprimezx=h.diff(Z,X)#dzx
+hprimezy=h.diff(Z,Y)#dzy
 #Lambdify i.e make them variables once again
 fxx=lambdify((X,Y,Z,s),hprimexx,'numpy')
 fxy=lambdify((X,Y,Z,s),hprimexy,'numpy')
@@ -137,7 +137,7 @@ hessian=np.reshape(hessian,(grid_nodes**3,3,3))
 #END SECTION----------------------------------------------------------------------------------------------------
 
 # **IGNORE** SECTION 2.1 Plot scatter,smoothed, eigvals, classification mask,color scatter, table with halo-classif ratios----------------------------
-scl_plt=20 #nth root scaling of density field
+scl_plt=50 #nth root scaling of density field
 smoothed_density_field(grid_nodes,slc,smooth_scl,in_val,fnl_val,s,image,plane,scl_plt)
 #-----------------------------------------------------------------------------------
 
