@@ -60,6 +60,7 @@ scatter_plot(Xc,Yc,Zc,slc,plane,grid_nodes,plane_thickness,sim_sz)
 # SECTION 2. Create Hessian ---------------------------------------------------------------------------------------
 X,Y,Z,s=symbols('X Y Z s')#sympy feature needed to take derivative of Gaussian 'h'.
 h=(1/sqrt(2*pi*s*s))**(3)*exp(-1/(2*s*s)*(Y**2+X**2+Z**2))#Will differentiate this analytically dxx,dxy...
+#h=(1/sqrt(1.0*2*pi*s*s))**(3)*exp(-1/(1.0*2*s*s)*((Y-0.5)**2+(X-0.5)**2+(Z-0.5)**2))
 #take second partial derivatives as per Hessian 
 hprimexx=h.diff(X,X)#dxx
 hprimexy=h.diff(X,Y)#dxy
