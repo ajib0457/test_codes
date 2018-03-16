@@ -271,3 +271,24 @@ def vector_scatter(data,mask,recon_vecs,grid_nodes,sim_sz,particles_filt,slc,Xc_
     plt.title('%s filament axis'%len(fnl_halos_vecs))
     
     plt.savefig('VECTOR_SCATTER_partcls%s_gd%d_slc%d_thck%sMpc_yplane_%s_%s_filament.png' %(particles_filt,grid_nodes,slc,plane_thickness,x_cutout,z_cutout))
+    
+def eigenvalue_plts(eig_one,eig_two,eig_three,grid_nodes,sim_sz,smooth_scl):
+    import matplotlib.pyplot as plt
+    
+    plt.figure(figsize=(18,5))
+    ax2=plt.subplot2grid((1,3), (0,0))
+    bins=200
+    plt.hist(eig_one,bins,normed=True,histtype='stepfilled',color='pink',linewidth=0)
+    plt.ylabel('PDF')
+    plt.xlabel(r'$\lambda_\mathrm{1}$')
+    
+    ax2=plt.subplot2grid((1,3), (0,1))
+    plt.hist(eig_two,bins,normed=True,histtype='stepfilled',color='pink',linewidth=0)
+    plt.xlabel(r'$\lambda_\mathrm{2}$')
+    plt.ylabel('PDF')
+    
+    ax2=plt.subplot2grid((1,3), (0,2))
+    plt.hist(eig_three,bins,normed=True,histtype='stepfilled',color='pink',linewidth=0)
+    plt.xlabel(r'$\lambda_\mathrm{3}$')
+    plt.ylabel('PDF')
+    plt.savefig('EIGENVALUES_DIST_gd%d_sim_sz%s_smooth%sMpc.png' %(grid_nodes,sim_sz,smooth_scl))
