@@ -5,6 +5,7 @@ import math as mth
 import h5py
 import sklearn.preprocessing as skl
 from plotter_funcs import * 
+from scipy import ndimage
 
 sim_sz=60           #Size of simulation in physical units Mpc/h cubed
 grid_nodes=200      #Density Field grid resolution
@@ -15,6 +16,7 @@ Mass_res=1.35*10**8 #Bolchoi particle mass as per, https://arxiv.org/pdf/1002.36
 
 #Load Bolchoi Simulation Catalogue, ONLY filtered for X,Y,Z=<sim_sz
 f=h5py.File("bolchoi_DTFE_rockstar_box_%scubed_xyz_vxyz_jxyz_m_r.h5"%sim_sz, 'r')
+#f=h5py.File("/import/oth3/ajib0457/wang_peng_code/Peng_run_bolchoi_smpl_python/bolchoi_DTFE_rockstar_allhalos_xyz_vxyz_jxyz_m_r.h5", 'r')
 data=f['/halo'][:]#data array: (Pos)XYZ(Mpc/h), (Vel)VxVyVz(km/s), (Ang. Mom)JxJyJz((Msun/h)*(Mpc/h)*km/s), (Vir. Mass)Mvir(Msun/h) & (Vir. Rad)Rvir(kpc/h) 
 f.close()
 
@@ -56,10 +58,11 @@ plane=1             #X-0, Y-1, Z-2
 plane_thickness=5 #Mpc/h
 scatter_plot(Xc,Yc,Zc,slc,plane,grid_nodes,plane_thickness,sim_sz)
 #-----------------------------------------------------------------------------------
-
+'''
 # SECTION 2. Create Hessian ---------------------------------------------------------------------------------------
 X,Y,Z,s=symbols('X Y Z s')#sympy feature needed to take derivative of Gaussian 'h'.
-h=(1/sqrt(2*pi*s*s))**(3)*exp(-1/(2*s*s)*(Y**2+X**2+Z**2))#Will differentiate this analytically dxx,dxy...
+h=(1/sqrt(2.0*pi*s*s))**(3)*exp(-1/(2.0*s*s)*((Y-0.5)**2+(X-0.5)**2+(Z-0.5)**2))#Will differentiate this analytically dxx,dxy...
+
 #h=(1/sqrt(1.0*2*pi*s*s))**(3)*exp(-1/(1.0*2*s*s)*((Y-0.5)**2+(X-0.5)**2+(Z-0.5)**2))
 #take second partial derivatives as per Hessian 
 hprimexx=h.diff(X,X)#dxx
@@ -136,12 +139,50 @@ ifft_dzy=np.reshape(ifft_dzy,(np.size(ifft_dzy),1))
 hessian=np.column_stack((ifft_dxx,ifft_dxy,ifft_dzx,ifft_dxy,ifft_dyy,ifft_dzy,ifft_dzx,ifft_dzy,ifft_dzz))  
 hessian=np.reshape(hessian,(grid_nodes**3,3,3))
 #END SECTION----------------------------------------------------------------------------------------------------
+'''
+# SECTION 2. Create Hessian ---------------------------------------------------------------------------------------
+#smooth via ndimage function
+s=1.0*smooth_scl/sim_sz*grid_nodes# s- standard deviation of Kernel, converted from Mpc/h into number of pixels
+smthd_image = ndimage.gaussian_filter(image,s,order=0,mode='wrap',truncate=25)#smoothing function
+fft_smthd_image=np.fft.fftn(smthd_image)
 
+#Create k-space grid
+k_grid = range(grid_nodes)/np.float64(grid_nodes)
+for i in range(grid_nodes/2+1, grid_nodes):
+    k_grid[i] = -np.float64(grid_nodes-i)/np.float64(grid_nodes)
+
+rc=1.*sim_sz/(grid_nodes)#physical space interval
+k_grid = k_grid*2*np.pi/rc# k=2pi/lambda as per the definition of a wavenumber. see wiki
+
+Hessian = np.zeros([grid_nodes,grid_nodes,grid_nodes,6])
+array=np.zeros([grid_nodes,grid_nodes,grid_nodes])
+for ii in range(6):# 6 for each unique hessian component
+#    print 'component', ii
+    for i in range(grid_nodes):
+        for j in range(grid_nodes):
+            for k in range(grid_nodes):
+                  if ii == 0: a = -k_grid[i]**2
+                  if ii == 1: a = -k_grid[i]*k_grid[j]
+                  if ii == 2: a = -k_grid[i]*k_grid[k]
+                  if ii == 3: a = -k_grid[j]**2
+                  if ii == 4: a = -k_grid[j]*k_grid[k]
+                  if ii == 5: a = -k_grid[k]**2
+                  array[i,j,k] = a
+
+    Hessian[:,:,:,ii] = np.fft.ifftn(fft_smthd_image*array).real
+
+#Rearrange and reshape Hessian to suit my format
+hessian=np.column_stack((Hessian[:,:,:,0].flatten(),Hessian[:,:,:,1].flatten(),Hessian[:,:,:,2].flatten(),Hessian[:,:,:,1].flatten(),Hessian[:,:,:,3].flatten(),Hessian[:,:,:,4].flatten(),Hessian[:,:,:,2].flatten(),Hessian[:,:,:,4].flatten(),Hessian[:,:,:,5].flatten()))
+hessian=np.reshape(hessian,(grid_nodes**3,3,3))
+
+#END SECTION----------------------------------------------------------------------------------------------------
+
+'''
 # **IGNORE** SECTION 2.1 Plot scatter,smoothed, eigvals, classification mask,color scatter, table with halo-classif ratios----------------------------
 scl_plt=50 #nth root scaling of density field
 smoothed_density_field(grid_nodes,slc,smooth_scl,in_val,fnl_val,s,image,plane,scl_plt)
 #-----------------------------------------------------------------------------------
-
+'''
 # SECTION 3. Calculate and reorder eigenpairs----------------------------------------------
 eig_vals_vecs=np.linalg.eig(hessian)
 #Eigenvalues 
@@ -156,6 +197,11 @@ eigvecs=eig_vals_vecs[1]
 vec_arr_num,vec_row,vec_col=np.shape(eigvecs)
 values=np.reshape(eigvecs.transpose(0,2,1),(vec_row*vec_arr_num,vec_col))#orient eigenvectors so that each row is an eigenvector
 #END SECTION------------------------------------------------------------------------------
+'''
+#SECTION 3.1 plot eigenvalues-------------------------------------------
+eigenvalue_plts(eig_one,eig_two,eig_three,grid_nodes,sim_sz,smooth_scl)
+#------------------------------------------------------------------------
+'''
 
 # SECTION 4. Classify Large scale structure--------------------------------------------------------------------
 lss=['filament','sheet','void','cluster']#which LSS to output mask & eigenpairs for
