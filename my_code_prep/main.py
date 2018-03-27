@@ -58,88 +58,7 @@ plane=1             #X-0, Y-1, Z-2
 plane_thickness=5 #Mpc/h
 scatter_plot(Xc,Yc,Zc,slc,plane,grid_nodes,plane_thickness,sim_sz)
 #-----------------------------------------------------------------------------------
-'''
-# SECTION 2. Create Hessian ---------------------------------------------------------------------------------------
-X,Y,Z,s=symbols('X Y Z s')#sympy feature needed to take derivative of Gaussian 'h'.
-h=(1/sqrt(2.0*pi*s*s))**(3)*exp(-1/(2.0*s*s)*((Y-0.5)**2+(X-0.5)**2+(Z-0.5)**2))#Will differentiate this analytically dxx,dxy...
 
-#h=(1/sqrt(1.0*2*pi*s*s))**(3)*exp(-1/(1.0*2*s*s)*((Y-0.5)**2+(X-0.5)**2+(Z-0.5)**2))
-#take second partial derivatives as per Hessian 
-hprimexx=h.diff(X,X)#dxx
-hprimexy=h.diff(X,Y)#dxy
-hprimeyy=h.diff(Y,Y)#dyy
-hprimezz=h.diff(Z,Z)#dzz
-hprimezx=h.diff(Z,X)#dzx
-hprimezy=h.diff(Z,Y)#dzy
-#Lambdify i.e make them variables once again
-fxx=lambdify((X,Y,Z,s),hprimexx,'numpy')
-fxy=lambdify((X,Y,Z,s),hprimexy,'numpy')
-fyy=lambdify((X,Y,Z,s),hprimeyy,'numpy')
-fzz=lambdify((X,Y,Z,s),hprimezz,'numpy')
-fzx=lambdify((X,Y,Z,s),hprimezx,'numpy')
-fzy=lambdify((X,Y,Z,s),hprimezy,'numpy')
-#3d meshgrid for each kernel and evaluate 6 partial derivatives to generate 9 kernels
-
-#Kernal settings
-img_x,img_y,img_z=np.shape(image)
-s=1.0*smooth_scl/sim_sz*grid_nodes# s- standard deviation of Kernel, converted from Mpc/h into number of pixels
-in_val,fnl_val=-grid_nodes/2,grid_nodes/2#Boundary of kernel
-
-#Kernel generator: The above lines from beginning SECTION 2. have analytically taken the second derivative of the 3D gaussian 'h' 
-X,Y,Z=np.meshgrid(np.linspace(in_val,fnl_val,img_x),np.linspace(in_val,fnl_val,img_y),np.linspace(in_val,fnl_val,img_z))
-dxx=fxx(X,Y,Z,s)#Now generate kernel for each unique hessian term
-dxy=fxy(X,Y,Z,s)
-dyy=fyy(X,Y,Z,s)
-dzz=fzz(X,Y,Z,s)
-dzx=fzx(X,Y,Z,s)
-dzy=fzy(X,Y,Z,s)
-   
-#shift kernels to make periodic 
-dxx=np.roll(dxx,int(img_x/2),axis=0)
-dxx=np.roll(dxx,int(img_y/2),axis=1)
-dxx=np.roll(dxx,int(img_z/2),axis=2)
-dxy=np.roll(dxy,int(img_x/2),axis=0)
-dxy=np.roll(dxy,int(img_y/2),axis=1)
-dxy=np.roll(dxy,int(img_z/2),axis=2)
-dyy=np.roll(dyy,int(img_x/2),axis=0)
-dyy=np.roll(dyy,int(img_y/2),axis=1)
-dyy=np.roll(dyy,int(img_z/2),axis=2)
-dzz=np.roll(dzz,int(img_x/2),axis=0)
-dzz=np.roll(dzz,int(img_y/2),axis=1)
-dzz=np.roll(dzz,int(img_z/2),axis=2)
-dzx=np.roll(dzx,int(img_x/2),axis=0)
-dzx=np.roll(dzx,int(img_y/2),axis=1)
-dzx=np.roll(dzx,int(img_z/2),axis=2)
-dzy=np.roll(dzy,int(img_x/2),axis=0)
-dzy=np.roll(dzy,int(img_y/2),axis=1)
-dzy=np.roll(dzy,int(img_z/2),axis=2)
-#fft 6 kernels & density field
-fft_dxx=np.fft.fftn(dxx)
-fft_dxy=np.fft.fftn(dxy)
-fft_dyy=np.fft.fftn(dyy)
-fft_dzz=np.fft.fftn(dzz)
-fft_dzx=np.fft.fftn(dzx)
-fft_dzy=np.fft.fftn(dzy)
-fft_db=np.fft.fftn(image)
-#convolution of kernels with density field & inverse transform
-ifft_dxx=np.fft.ifftn(np.multiply(fft_dxx,fft_db)).real
-ifft_dxy=np.fft.ifftn(np.multiply(fft_dxy,fft_db)).real
-ifft_dyy=np.fft.ifftn(np.multiply(fft_dyy,fft_db)).real
-ifft_dzz=np.fft.ifftn(np.multiply(fft_dzz,fft_db)).real
-ifft_dzx=np.fft.ifftn(np.multiply(fft_dzx,fft_db)).real
-ifft_dzy=np.fft.ifftn(np.multiply(fft_dzy,fft_db)).real
-#reshape into column matrices
-ifft_dxx=np.reshape(ifft_dxx,(np.size(ifft_dxx),1))      
-ifft_dxy=np.reshape(ifft_dxy,(np.size(ifft_dxy),1))
-ifft_dyy=np.reshape(ifft_dyy,(np.size(ifft_dyy),1))
-ifft_dzz=np.reshape(ifft_dzz,(np.size(ifft_dzz),1))
-ifft_dzx=np.reshape(ifft_dzx,(np.size(ifft_dzx),1))
-ifft_dzy=np.reshape(ifft_dzy,(np.size(ifft_dzy),1))
-#create Hessian
-hessian=np.column_stack((ifft_dxx,ifft_dxy,ifft_dzx,ifft_dxy,ifft_dyy,ifft_dzy,ifft_dzx,ifft_dzy,ifft_dzz))  
-hessian=np.reshape(hessian,(grid_nodes**3,3,3))
-#END SECTION----------------------------------------------------------------------------------------------------
-'''
 # SECTION 2. Create Hessian ---------------------------------------------------------------------------------------
 #smooth via ndimage function
 s=1.0*smooth_scl/sim_sz*grid_nodes# s- standard deviation of Kernel, converted from Mpc/h into number of pixels
@@ -154,25 +73,57 @@ for i in range(grid_nodes/2+1, grid_nodes):
 rc=1.*sim_sz/(grid_nodes)#physical space interval
 k_grid = k_grid*2*np.pi/rc# k=2pi/lambda as per the definition of a wavenumber. see wiki
 
-Hessian = np.zeros([grid_nodes,grid_nodes,grid_nodes,6])
-array=np.zeros([grid_nodes,grid_nodes,grid_nodes])
-for ii in range(6):# 6 for each unique hessian component
-#    print 'component', ii
-    for i in range(grid_nodes):
-        for j in range(grid_nodes):
-            for k in range(grid_nodes):
-                  if ii == 0: a = -k_grid[i]**2
-                  if ii == 1: a = -k_grid[i]*k_grid[j]
-                  if ii == 2: a = -k_grid[i]*k_grid[k]
-                  if ii == 3: a = -k_grid[j]**2
-                  if ii == 4: a = -k_grid[j]*k_grid[k]
-                  if ii == 5: a = -k_grid[k]**2
-                  array[i,j,k] = a
+k_z=np.reshape(k_grid,(1,grid_nodes))
+k_y=np.reshape(k_z,(grid_nodes,1))
 
-    Hessian[:,:,:,ii] = np.fft.ifftn(fft_smthd_image*array).real
+a_z=np.zeros((grid_nodes,grid_nodes,grid_nodes))
+a_z[:]=k_z
+a_y=np.zeros((grid_nodes,grid_nodes,grid_nodes))
+a_y[:]=k_y
+a_x=np.zeros((grid_nodes,grid_nodes,grid_nodes))
+a_x=a_z.transpose()
 
-#Rearrange and reshape Hessian to suit my format
-hessian=np.column_stack((Hessian[:,:,:,0].flatten(),Hessian[:,:,:,1].flatten(),Hessian[:,:,:,2].flatten(),Hessian[:,:,:,1].flatten(),Hessian[:,:,:,3].flatten(),Hessian[:,:,:,4].flatten(),Hessian[:,:,:,2].flatten(),Hessian[:,:,:,4].flatten(),Hessian[:,:,:,5].flatten()))
+a_xx=-1*np.multiply(a_x,a_x)
+a_yy=-1*np.multiply(a_y,a_y)
+a_zz=-1*np.multiply(a_z,a_z)
+a_xy=-1*np.multiply(a_x,a_y)
+a_xz=-1*np.multiply(a_x,a_z)
+a_yz=-1*np.multiply(a_y,a_z)
+del a_z
+del a_y
+del a_x
+dxx=fft_smthd_image*a_xx
+dyy=fft_smthd_image*a_yy
+dzz=fft_smthd_image*a_zz
+dxy=fft_smthd_image*a_xy
+dxz=fft_smthd_image*a_xz
+dyz=fft_smthd_image*a_yz
+del a_xx
+del a_yy
+del a_zz
+del a_xy
+del a_xz
+del a_yz
+dxx=np.fft.ifftn(dxx).real
+dxx=dxx.flatten()
+dyy=np.fft.ifftn(dyy).real
+dyy=dyy.flatten()
+dzz=np.fft.ifftn(dzz).real
+dzz=dzz.flatten()
+dxy=np.fft.ifftn(dxy).real
+dxy=dxy.flatten()
+dxz=np.fft.ifftn(dxz).real
+dxz=dxz.flatten()
+dyz=np.fft.ifftn(dyz).real
+dyz=dyz.flatten()
+
+hessian=np.column_stack((dxx,dxy,dxz,dxy,dyy,dyz,dxz,dyz,dzz))
+del dxx
+del dyy
+del dzz
+del dxy
+del dxz
+del dyz
 hessian=np.reshape(hessian,(grid_nodes**3,3,3))
 
 #END SECTION----------------------------------------------------------------------------------------------------
