@@ -3,31 +3,36 @@ import math as mth
 import h5py
 import sklearn.preprocessing as skl 
 from plotter_funcs import *
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 sim_sz=250           #Size of simulation in physical units Mpc/h cubed
 grid_nodes=850      #Density Field grid resolution
 smooth_scl=3.5      #Smoothing scale in physical units Mpc/h
-tot_mass_bins=6     #Number of Halo mass bins
+tot_mass_bins=5     #Number of Halo mass bins
 particles_filt=500  #Halos to filter out based on number of particles, ONLY for Dot Product Spin-LSS(SECTION 5.)
 Mass_res=1.35*10**8 #Bolchoi particle mass as per, https://arxiv.org/pdf/1002.3660.pdf
+total_lss_parts=8   #Total amount of lss_class parts
 
 recon_vecs_x=np.zeros((grid_nodes**3))
 recon_vecs_y=np.zeros((grid_nodes**3))
 recon_vecs_z=np.zeros((grid_nodes**3))
 mask=np.zeros((grid_nodes**3))
-for part in range(tot_mass_bins):
+for part in range(total_lss_parts):
 
-    nrows_in=int(1.*(grid_nodes**3)/tot_mass_bins*part)
-    nrows_fn=nrows_in+int(1.*(grid_nodes**3)/tot_mass_bins)
-    f=h5py.File("/scratch/GAMNSCM2/bolchoi_z0/correl/DTFE/files/output_files/eigvecs/fil_recon_vecs_DTFE_gd%d_smth%sMpc_%d.h5" %(grid_nodes,smooth_scl,part), 'r')
+    nrows_in=int(1.*(grid_nodes**3)/total_lss_parts*part)
+    nrows_fn=nrows_in+int(1.*(grid_nodes**3)/total_lss_parts)
+    f=h5py.File("/scratch/GAMNSCM2/bolchoi_z0/correl/my_den/files/output_files/eigvecs/fil_sim%s_recon_vecs_DTFE_gd%d_smth%sMpc_%d.h5" %(sim_sz,grid_nodes,smooth_scl,part), 'r')
     recon_vecs_x[nrows_in:nrows_fn]=f['/group%d/x'%part][:]
     recon_vecs_y[nrows_in:nrows_fn]=f['/group%d/y'%part][:]
     recon_vecs_z[nrows_in:nrows_fn]=f['/group%d/z'%part][:]
     f.close()
-    f2=h5py.File("/scratch/GAMNSCM2/bolchoi_z0/correl/DTFE/files/output_files/eigvecs/fil_recon_vecs_DTFE_gd%d_smth%sMpc_%d_mask.h5" %(grid_nodes,smooth_scl,part), 'r')
+    f2=h5py.File("/scratch/GAMNSCM2/bolchoi_z0/correl/my_den/files/output_files/eigvecs/fil_sim%s_recon_vecs_DTFE_gd%d_smth%sMpc_%d_mask.h5" %(sim_sz,grid_nodes,smooth_scl,part), 'r')
     mask[nrows_in:nrows_fn]=f2['/mask%d'%part][:]
     f2.close()
 
+#f=h5py.File("/scratch/GAMNSCM2/bolchoi_z0/cat_reconfig/files/output_files/bolchoi_DTFE_rockstar_box_%scubed_xyz_vxyz_jxyz_m_r.h5"%sim_sz, 'r')#xyz vxvyvz jxjyjz & Rmass & Rvir: Halo radius (kpc/h comoving).
 f=h5py.File("/scratch/GAMNSCM2/bolchoi_z0/cat_reconfig/files/output_files/bolchoi_DTFE_rockstar_allhalos_xyz_vxyz_jxyz_m_r.h5", 'r')
 data=f['/halo'][:]#data array: (Pos)XYZ(Mpc/h), (Vel)VxVyVz(km/s), (Ang. Mom)JxJyJz((Msun/h)*(Mpc/h)*km/s), (Vir. Mass)Mvir(Msun/h) & (Vir. Rad)Rvir(kpc/h) 
 f.close()
@@ -111,20 +116,24 @@ for mass_bin in range(tot_mass_bins):
 
     store_spin=np.asarray(store_spin) 
     costheta=abs(store_spin)#Take absolute value as only Alignment counts.
-          
-    results[mass_bin,2]=np.mean(costheta)#Alignment value calc. and store
-    
-    #Calculating error using bootstrap resampling
-    runs=300+mass_bin*300
-    a=np.random.randint(low=0,high=len(costheta),size=(runs,len(costheta)))
-    mean_set=np.mean(costheta[a],axis=1)
-    results[mass_bin,3]=np.std(mean_set)#Store 1sigma error
-    
-    f=h5py.File('/project/GAMNSCM2/bolchoi_z0/correl/DTFE/files/output_files/dotproduct/spin_lss/DTFE_grid%d_spin_store_fil_Log%s-%s_smth%sMpc_%sbins.h5'%(grid_nodes,round(low_int_mass,2),round(hi_int_mass,2),smooth_scl,tot_mass_bins),'w')     
-    f.create_dataset('/dp',data=costheta)
-    f.close() 
+    if len(costheta)>0:      
+        results[mass_bin,2]=np.mean(costheta)#Alignment value calc. and store
+        
+        #Calculating error using bootstrap resampling
+        runs=300+mass_bin*300
+        a=np.random.randint(low=0,high=len(costheta),size=(runs,len(costheta)))
+        mean_set=np.mean(costheta[a],axis=1)
+        results[mass_bin,3]=np.std(mean_set)#Store 1sigma error
+        
+        f=h5py.File('/scratch/GAMNSCM2/bolchoi_z0/correl/my_den/files/output_files/dotproduct/spin_lss/DTFE_grid%d_spin_store_fil_Log%s-%s_smth%sMpc_%sbins.h5'%(grid_nodes,round(low_int_mass,2),round(hi_int_mass,2),smooth_scl,tot_mass_bins),'w')     
+        f.create_dataset('/dp',data=costheta)
+        f.close() 
     
 #Plot correlation    
-alignment_plt(grid_nodes,results)
+alignment_plt(grid_nodes,results,smooth_scl)
+f=h5py.File('results_DTFE_grid%d_spin_store_fil_Log%s-%s_smth%sMpc_%sbins.h5'%(grid_nodes,round(low_int_mass,2),round(hi_int_mass,2),smooth_scl,tot_mass_bins),'w')     
+f.create_dataset('/results',data=results)
+f.close()
+
 
    
