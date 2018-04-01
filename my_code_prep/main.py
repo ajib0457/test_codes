@@ -9,7 +9,7 @@ from scipy import ndimage
 
 sim_sz=60           #Size of simulation in physical units Mpc/h cubed
 grid_nodes=200      #Density Field grid resolution
-smooth_scl=3.5      #Smoothing scale in physical units Mpc/h
+smooth_scl=2      #Smoothing scale in physical units Mpc/h
 tot_mass_bins=4     #Number of Halo mass bins
 particles_filt=300  #Halos to filter out based on number of particles, ONLY for Dot Product Spin-LSS(SECTION 5.)
 Mass_res=1.35*10**8 #Bolchoi particle mass as per, https://arxiv.org/pdf/1002.3660.pdf
@@ -51,7 +51,7 @@ for i in range(len(Xc)):
     grid_index_z=mth.trunc(halos[i,2]*Zc_mult-Zc_minus)   
     image[grid_index_x,grid_index_y,grid_index_z]+=h_mass[i]#Add halo mass to coinciding pixel 
 #END SECTION-------------------------------------------------------------------------
-    
+      
 # **IGNORE** SECTION 1.1 Plot scatter, velocity & AM vector scatter----------------------------
 slc=160             # 0 - grid_nodes  
 plane=1             #X-0, Y-1, Z-2   
@@ -126,6 +126,9 @@ del dxz
 del dyz
 hessian=np.reshape(hessian,(grid_nodes**3,3,3))
 
+f=h5py.File("my_hess.h5", 'w')
+f.create_dataset('Hessian_matrix', data=hessian)
+f.close()
 #END SECTION----------------------------------------------------------------------------------------------------
 
 '''
@@ -234,6 +237,11 @@ def lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three):
 eig_fnl,mask_fnl= lss_classifier(lss,eigvals_unsorted,values,eig_one,eig_two,eig_three)#Function run
 mask=np.reshape(mask_fnl,(grid_nodes,grid_nodes,grid_nodes))#Reshape mask_fnl
 #END SECTION-----------------------------------------------------------------------------------------------------
+
+f=h5py.File("eig_fnl_mask.h5", 'w')
+f.create_dataset('eig_fnl', data=eig_fnl)
+f.create_dataset('mask_fnl', data=mask_fnl)
+f.close()
 
 # **IGNORE** SECTION 4.1 Plot scatter,smoothed, eigvals, classification mask,color scatter, table with halo-classif ratios----------------------------
 classify_mask(mask,grid_nodes,slc,smooth_scl,plane)
