@@ -130,8 +130,8 @@ def colorscatter_plt(data,mask,grid_nodes,slc,smooth_scl,plane,sim_sz,plane_thic
     mass=data[:,9]
     rad=data[:,10]    
     #scale mass and radii of halos
-    mass=(mass-np.min(mass))/(np.max(mass)-np.min(mass))
-    rad=(rad-np.min(rad))/(np.max(rad)-np.min(rad))
+    data[:,9]=(mass-np.min(mass))/(np.max(mass)-np.min(mass))
+    data[:,10]=(rad-np.min(rad))/(np.max(rad)-np.min(rad))
 
     box=np.max(data[:,0])#subset box length
     lo_lim_partcl=1.*slc/(grid_nodes)*box-1.*plane_thickness/2 #For particle distribution
@@ -156,7 +156,7 @@ def colorscatter_plt(data,mask,grid_nodes,slc,smooth_scl,plane,sim_sz,plane_thic
         lss_plt_filt=np.where(partcls[:,11]==i)
         lss=['voids','sheets','filaments','clusters']  
         scale_factor=1000
-        ax.scatter(partcls[lss_plt_filt,0],partcls[lss_plt_filt,2],s=rad*scale_factor,c=color,label=lss[i],alpha=0.9, edgecolors='none')
+        ax.scatter(partcls[lss_plt_filt,0],partcls[lss_plt_filt,2],s=partcls[lss_plt_filt,10]*scale_factor,c=color,label=lss[i],alpha=0.9, edgecolors='none')
         i+=1
     
     #ax.view_init(elev=0,azim=-90)#upon generating figure, usually have to rotate manually by 90 deg. clockwise 
@@ -178,7 +178,7 @@ def alignment_plt(grid_nodes,results):
     
     ax2=plt.subplot2grid((1,1), (0,0))
     ax2.axhline(y=0.5, xmin=0, xmax=15, color = 'k',linestyle='--')
-    #2000 GRID
+    
     ax2.plot(results[:,0],results[:,2],'g-',label='halo_LSS. 3.5Mpc/h')
     ax2.fill_between(results[:,0], results[:,2]-results[:,3], results[:,2]+results[:,3],facecolor='green',alpha=0.3)
     
@@ -273,6 +273,8 @@ def vector_scatter(data,mask,recon_vecs,grid_nodes,sim_sz,particles_filt,slc,Xc_
     plt.savefig('VECTOR_SCATTER_partcls%s_gd%d_slc%d_thck%sMpc_yplane_%s_%s_filament.png' %(particles_filt,grid_nodes,slc,plane_thickness,x_cutout,z_cutout))
     
 def eigenvalue_plts(eig_one,eig_two,eig_three,grid_nodes,sim_sz,smooth_scl):
+    import matplotlib
+    matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     
     plt.figure(figsize=(18,5))
