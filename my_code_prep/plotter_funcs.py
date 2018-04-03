@@ -130,8 +130,8 @@ def colorscatter_plt(data,mask,grid_nodes,slc,smooth_scl,plane,sim_sz,plane_thic
     mass=data[:,9]
     rad=data[:,10]    
     #scale mass and radii of halos
-    mass=(mass-np.min(mass))/(np.max(mass)-np.min(mass))
-    rad=(rad-np.min(rad))/(np.max(rad)-np.min(rad))
+    data[:,9]=(mass-np.min(mass))/(np.max(mass)-np.min(mass))
+    data[:,10]=(rad-np.min(rad))/(np.max(rad)-np.min(rad))
 
     box=np.max(data[:,0])#subset box length
     lo_lim_partcl=1.*slc/(grid_nodes)*box-1.*plane_thickness/2 #For particle distribution
@@ -156,7 +156,7 @@ def colorscatter_plt(data,mask,grid_nodes,slc,smooth_scl,plane,sim_sz,plane_thic
         lss_plt_filt=np.where(partcls[:,11]==i)
         lss=['voids','sheets','filaments','clusters']  
         scale_factor=1000
-        ax.scatter(partcls[lss_plt_filt,0],partcls[lss_plt_filt,2],s=rad*scale_factor,c=color,label=lss[i],alpha=0.9, edgecolors='none')
+        ax.scatter(partcls[lss_plt_filt,0],partcls[lss_plt_filt,2],s=partcls[lss_plt_filt,10]*scale_factor,c=color,label=lss[i],alpha=0.9, edgecolors='none')
         i+=1
     
     #ax.view_init(elev=0,azim=-90)#upon generating figure, usually have to rotate manually by 90 deg. clockwise 
@@ -297,3 +297,38 @@ def eigenvalue_plts(eig_one,eig_two,eig_three,grid_nodes,sim_sz,smooth_scl):
     plt.xlabel(r'$\lambda_\mathrm{3}$')
     plt.ylabel('PDF')
     plt.savefig('/scratch/GAMNSCM2/bolchoi_z0/correl/DTFE/files/output_files/dotproduct/spin_lss/dotprod_plots/EIGENVALUES_DIST_gd%d_sim_sz%s_smooth%sMpc.png' %(grid_nodes,sim_sz,smooth_scl))
+
+def posterior_plt(c_samples,results,bins,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type,nwalkers,steps_wlk): 
+    #Posterior plotting
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import math as mth
+    import numpy as np
+    
+    #grid size calc.
+    rng=len(c_samples)
+    sz_x=round(rng/2.0)
+    sz_y=round(rng/2.0)
+    while sz_x*sz_y<(rng):
+        sz_y+=1    
+    while sz_x*sz_y>(rng+1):
+        sz_y-=1       
+    mass_bin=0#dictionary tally
+    for i in range(int(sz_x)):
+        for j in range(int(sz_y)):
+            if mass_bin<(rng):
+                plt.subplot2grid((int(sz_x),int(sz_y)), (int(i),int(j)))
+                
+                plt.hist(c_samples[mass_bin],bins=bins,normed=True,label='MCMC posterior')
+                #Gaussian plotting
+                x=np.linspace(np.min(c_samples),np.max(c_samples),1000) 
+                normstdis=1/(np.sqrt(2*(results[mass_bin,3]**2)*mth.pi))*np.exp(-((x-results[mass_bin,2])**2)/(2*results[mass_bin,3]**2))
+                plt.plot(x,normstdis,label='Gaussian fit')
+                #info table
+                rows=['nwalk - stps','Lo - Hi','c+-e']                
+                data_fnc=[['%s - %s'%(nwalkers,steps_wlk)],['%s - %s'%(results[mass_bin,0],results[mass_bin,1])],['%s - %s'%(results[mass_bin,2],results[mass_bin,3])]]
+                plt.table(cellText=data_fnc,loc='top',rowLabels=rows,colWidths=0.5 ,cellLoc='center')          
+                mass_bin+=1#dictionary tally
+    
+    plt.savefig('myden_mcmcpost_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.h5'%(lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt))
