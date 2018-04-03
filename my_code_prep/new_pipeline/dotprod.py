@@ -1,7 +1,9 @@
 import numpy as np
 import math as mth
 import h5py
-import sklearn.preprocessing as skl 
+import sklearn.preprocessing as skl
+import sys
+sys.path.insert(0, '/project/GAMNSCM2/') 
 from plotter_funcs import *
 import matplotlib
 matplotlib.use('Agg')
@@ -9,11 +11,13 @@ import matplotlib.pyplot as plt
 
 sim_sz=250           #Size of simulation in physical units Mpc/h cubed
 grid_nodes=850      #Density Field grid resolution
-smooth_scl=3.5      #Smoothing scale in physical units Mpc/h
+smooth_scl=2      #Smoothing scale in physical units Mpc/h
 tot_mass_bins=5     #Number of Halo mass bins
-particles_filt=500  #Halos to filter out based on number of particles, ONLY for Dot Product Spin-LSS(SECTION 5.)
+particles_filt=300  #Halos to filter out based on number of particles, ONLY for Dot Product Spin-LSS(SECTION 5.)
 Mass_res=1.35*10**8 #Bolchoi particle mass as per, https://arxiv.org/pdf/1002.3660.pdf
 total_lss_parts=8   #Total amount of lss_class parts
+lss_type=2           #Cluster-3 Filament-2 Sheet-1 Void-0
+xtra_runs=500       #bootstrap resampling runs
 
 recon_vecs_x=np.zeros((grid_nodes**3))
 recon_vecs_y=np.zeros((grid_nodes**3))
@@ -58,82 +62,67 @@ del recon_vecs_y
 del recon_vecs_z
 mask=np.reshape(mask,(grid_nodes,grid_nodes,grid_nodes))
 
-recon_vecs_flt_norm=skl.normalize(recon_vecs_flt_unnorm)#normalize eigenvectors to make sure.
-del recon_vecs_flt_unnorm
-recon_vecs=np.reshape(recon_vecs_flt_norm,(grid_nodes,grid_nodes,grid_nodes,3))#Reshape eigenvectors
+recon_vecs=np.reshape(recon_vecs_flt_unnorm,(grid_nodes,grid_nodes,grid_nodes,3))#Reshape eigenvectors
 
+#'data' format reminder: (Pos)XYZ(Mpc/h), (Vel)VxVyVz(km/s), (Ang. Mom)JxJyJz((Msun/h)*(Mpc/h)*km/s), (Vir. Mass)Mvir(Msun/h) & (Vir. Rad)Rvir(kpc/h)
 partcl_halo_flt=np.where((data[:,9]/(Mass_res))>=particles_filt)#filter for halos with <N particles
 data=data[partcl_halo_flt]#Filter out halos with <N particles
+
+#apend eigvecs on to data array and apend mask value to data array
+#create empty arrays and apend to data array
+color_cd=np.zeros((len(data),1))
+norm_eigvecs=np.zeros((len(data),3))
+data=np.hstack((data,color_cd,norm_eigvecs))
+for i in range(len(data)):
+   #Create index from halo coordinates
+    grid_index_x=mth.trunc(data[i,0]*Xc_mult-Xc_minus)      
+    grid_index_y=mth.trunc(data[i,1]*Yc_mult-Yc_minus) 
+    grid_index_z=mth.trunc(data[i,2]*Zc_mult-Zc_minus) 
+    data[i,11]=mask[grid_index_x,grid_index_y,grid_index_z]
+    data[i,12:15]=recon_vecs[grid_index_x,grid_index_y,grid_index_z,:]
+del recon_vecs
+del mask
+#NEW 'data' format :(Pos)XYZ(Mpc/h), (Vel)VxVyVz(km/s), (Ang. Mom)JxJyJz((Msun/h)*(Mpc/h)*km/s), (Vir. Mass)Mvir(Msun/h), 
+#(Vir. Rad)Rvir(kpc/h), mask(0,1,2,3) & eigvecs(ex,ey,ez) 
+fil_filt=np.where(data[:,11]==lss_type)#2-filament
+data=data[fil_filt]
+  
 halo_mass=data[:,9]
 log_halo_mass=np.log10(halo_mass)#convert into log10(M)
 mass_intvl=(np.max(log_halo_mass)-np.min(log_halo_mass))/tot_mass_bins#log_mass value used to find mass interval
-
+dict={}
 results=np.zeros((tot_mass_bins,4))# [Mass_min, Mass_max, Value, Error] 
 for mass_bin in range(tot_mass_bins):
     
-    #Positions
-    Xc=data[:,0]#I must redefine these at each iteration since I am filtering them for each mass interval
-    Yc=data[:,1]
-    Zc=data[:,2]
-    #Angular momenta
-    Lx=data[:,6]
-    Ly=data[:,7]
-    Lz=data[:,8]
-
     low_int_mass=np.min(log_halo_mass)+mass_intvl*mass_bin#Calculate mass interval
     hi_int_mass=low_int_mass+mass_intvl#Calculate mass interval
     results[mass_bin,0]=low_int_mass#Store mass interval
-    results[mass_bin,1]=hi_int_mass#Store mass interval
-   
+    results[mass_bin,1]=hi_int_mass#Store mass interval   
     #Create mask to filter out halos within mass interval
-    mass_mask=np.zeros(len(log_halo_mass))
-    loint=np.where(log_halo_mass>=low_int_mass)
-    hiint=np.where(log_halo_mass<hi_int_mass)
-    mass_mask[loint]=1
-    mass_mask[hiint]=mass_mask[hiint]+1
-    mass_indx=np.where(mass_mask==2)
-    
-    #Positions & Angular Momenta filtered for mass interval
-    Xc=Xc[mass_indx]
-    Yc=Yc[mass_indx]
-    Zc=Zc[mass_indx]
-    halos_mom=np.column_stack((Lx,Ly,Lz))
-    halos_mom=halos_mom[mass_indx]
-    
-    norm_halos_mom=skl.normalize(halos_mom)#Normalize Angular Momenta
-    halos=np.column_stack((Xc,Yc,Zc,norm_halos_mom))
-       
-    store_spin=[]#Store Dot Product of spin-LSS
-    for i in range(len(Xc)):
-       #Create index from halo coordinates
-        grid_index_x=mth.trunc(halos[i,0]*Xc_mult-Xc_minus)      
-        grid_index_y=mth.trunc(halos[i,1]*Yc_mult-Yc_minus) 
-        grid_index_z=mth.trunc(halos[i,2]*Zc_mult-Zc_minus) 
-        
-        if (mask[grid_index_x,grid_index_y,grid_index_z]==2):#Calculate Dot Product for filament-2
-            spin_dot=np.inner(halos[i,3:6],recon_vecs[grid_index_x,grid_index_y,grid_index_z,:]) 
-            store_spin.append(spin_dot)
+    mass_mask=np.logical_and(log_halo_mass>=low_int_mass,log_halo_mass<hi_int_mass)
+    data_mass_bin=data[mass_mask]
 
-    store_spin=np.asarray(store_spin) 
-    costheta=abs(store_spin)#Take absolute value as only Alignment counts.
-    if len(costheta)>0:      
-        results[mass_bin,2]=np.mean(costheta)#Alignment value calc. and store
-        
-        #Calculating error using bootstrap resampling
-        runs=300+mass_bin*300
-        a=np.random.randint(low=0,high=len(costheta),size=(runs,len(costheta)))
-        mean_set=np.mean(costheta[a],axis=1)
-        results[mass_bin,3]=np.std(mean_set)#Store 1sigma error
-        
-        f=h5py.File('/scratch/GAMNSCM2/bolchoi_z0/correl/my_den/files/output_files/dotproduct/spin_lss/DTFE_grid%d_spin_store_fil_Log%s-%s_smth%sMpc_%sbins.h5'%(grid_nodes,round(low_int_mass,2),round(hi_int_mass,2),smooth_scl,tot_mass_bins),'w')     
-        f.create_dataset('/dp',data=costheta)
-        f.close() 
-    
-#Plot correlation    
-alignment_plt(grid_nodes,results,smooth_scl)
-f=h5py.File('results_DTFE_grid%d_spin_store_fil_Log%s-%s_smth%sMpc_%sbins.h5'%(grid_nodes,round(low_int_mass,2),round(hi_int_mass,2),smooth_scl,tot_mass_bins),'w')     
+    #normalize vectors
+    data_mass_bin[:,12:15]=skl.normalize(data_mass_bin[:,12:15])#Eigenvectors
+    data_mass_bin[:,6:9]=skl.normalize(data_mass_bin[:,6:9])#Halo AM
+    store_dp=np.zeros(len(data_mass_bin))
+    for i in range(len(data_mass_bin)):
+        store_dp[i]=np.inner(data_mass_bin[i,12:15],data_mass_bin[i,6:9])#take the dot product between vecs, row by row   
+    store_dp=abs(store_dp)    
+    dict[mass_bin]=store_dp    
+    results[mass_bin,2]=np.mean(store_dp)#Alignment value calc. and store
+
+    #Calculating error using bootstrap resampling
+    runs=200+mass_bin*xtra_runs
+    a=np.random.randint(low=0,high=len(store_dp),size=(runs,len(store_dp)))
+    mean_set=np.mean(store_dp[a],axis=1)
+    results[mass_bin,3]=np.std(mean_set)#Store 1sigma error       
+       
+f=h5py.File('/scratch/GAMNSCM2/bolchoi_z0/correl/my_den/files/output_files/dotproduct/spin_lss/myden_dp_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.h5'%(lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt),'w')     
+for mass_bins in range(tot_mass_bins):   
+    f.create_dataset('/dp%s'%mass_bins,data=dict[mass_bins])
 f.create_dataset('/results',data=results)
 f.close()
-
-
-   
+    
+#Plot correlation    
+alignment_plt(grid_nodes,results,smooth_scl)  
