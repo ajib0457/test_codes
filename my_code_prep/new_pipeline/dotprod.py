@@ -1,23 +1,24 @@
 import numpy as np
 import math as mth
 import h5py
-import sklearn.preprocessing as skl
+import sklearn.preprocessing as skl 
 import sys
 sys.path.insert(0, '/project/GAMNSCM2/') 
 from plotter_funcs import *
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import pickle
 
 sim_sz=250           #Size of simulation in physical units Mpc/h cubed
 grid_nodes=850      #Density Field grid resolution
 smooth_scl=2      #Smoothing scale in physical units Mpc/h
 tot_mass_bins=5     #Number of Halo mass bins
-particles_filt=300  #Halos to filter out based on number of particles, ONLY for Dot Product Spin-LSS(SECTION 5.)
+particles_filt=500  #Halos to filter out based on number of particles, ONLY for Dot Product Spin-LSS(SECTION 5.)
 Mass_res=1.35*10**8 #Bolchoi particle mass as per, https://arxiv.org/pdf/1002.3660.pdf
 total_lss_parts=8   #Total amount of lss_class parts
 lss_type=2           #Cluster-3 Filament-2 Sheet-1 Void-0
-xtra_runs=500       #bootstrap resampling runs
+xtra_runs=700       #bootstrap resampling runs
 
 recon_vecs_x=np.zeros((grid_nodes**3))
 recon_vecs_y=np.zeros((grid_nodes**3))
@@ -90,7 +91,7 @@ data=data[fil_filt]
 halo_mass=data[:,9]
 log_halo_mass=np.log10(halo_mass)#convert into log10(M)
 mass_intvl=(np.max(log_halo_mass)-np.min(log_halo_mass))/tot_mass_bins#log_mass value used to find mass interval
-dict={}
+diction={}
 results=np.zeros((tot_mass_bins,4))# [Mass_min, Mass_max, Value, Error] 
 for mass_bin in range(tot_mass_bins):
     
@@ -109,7 +110,7 @@ for mass_bin in range(tot_mass_bins):
     for i in range(len(data_mass_bin)):
         store_dp[i]=np.inner(data_mass_bin[i,12:15],data_mass_bin[i,6:9])#take the dot product between vecs, row by row   
     store_dp=abs(store_dp)    
-    dict[mass_bin]=store_dp    
+    diction[mass_bin]=store_dp    
     results[mass_bin,2]=np.mean(store_dp)#Alignment value calc. and store
 
     #Calculating error using bootstrap resampling
@@ -117,12 +118,16 @@ for mass_bin in range(tot_mass_bins):
     a=np.random.randint(low=0,high=len(store_dp),size=(runs,len(store_dp)))
     mean_set=np.mean(store_dp[a],axis=1)
     results[mass_bin,3]=np.std(mean_set)#Store 1sigma error       
-       
+    diction['results']=results
+'''       
 f=h5py.File('/scratch/GAMNSCM2/bolchoi_z0/correl/my_den/files/output_files/dotproduct/spin_lss/myden_dp_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.h5'%(lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt),'w')     
 for mass_bins in range(tot_mass_bins):   
     f.create_dataset('/dp%s'%mass_bins,data=dict[mass_bins])
 f.create_dataset('/results',data=results)
 f.close()
-    
+'''
+
+filehandler = open('/scratch/GAMNSCM2/bolchoi_z0/correl/my_den/files/output_files/dotproduct/spin_lss/myden_dp_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.pkl'%(lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt),"wb")
+pickle.dump(diction,filehandler)    
 #Plot correlation    
 alignment_plt(grid_nodes,results,smooth_scl)  
