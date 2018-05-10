@@ -182,12 +182,12 @@ def alignment_plt(grid_nodes,results,smooth_scl):
     ax2=plt.subplot2grid((1,1), (0,0))
     ax2.axhline(y=0.5, xmin=0, xmax=15, color = 'k',linestyle='--')
     
-    ax2.plot(results[:,0],results[:,2],'g-',label='halo_LSS. 3.5Mpc/h')
+    ax2.plot(results[:,0],results[:,2],'g-',label='spin_filament')
     ax2.fill_between(results[:,0], results[:,2]-results[:,3], results[:,2]+results[:,3],facecolor='green',alpha=0.3)
     
     plt.ylabel('Mean cos(theta)')
     plt.xlabel('log Mass[M_solar]')   
-    plt.title('Spin-Filament')
+    plt.title('Smoothing: %sMpc'%smooth_scl)
     plt.legend(loc='upper right')
     plt.savefig('ALIGNMENT_PLOT_grid_%s_smth_scl%s.png'%(grid_nodes,smooth_scl))
     
@@ -298,7 +298,7 @@ def eigenvalue_plts(eig_one,eig_two,eig_three,grid_nodes,sim_sz,smooth_scl):
     plt.ylabel('PDF')
     plt.savefig('/scratch/GAMNSCM2/bolchoi_z0/correl/DTFE/files/output_files/dotproduct/spin_lss/dotprod_plots/EIGENVALUES_DIST_gd%d_sim_sz%s_smooth%sMpc.png' %(grid_nodes,sim_sz,smooth_scl))
 
-def posterior_plt(c_samples,results,bins,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type,nwalkers,steps_wlk): 
+def posterior_plt(c_samples,results,bins,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type,method,**args): 
     #Posterior plotting
     import matplotlib
     matplotlib.use('Agg')
@@ -319,16 +319,118 @@ def posterior_plt(c_samples,results,bins,sim_sz,grid_nodes,smooth_scl,tot_mass_b
         for j in range(int(sz_y)):
             if mass_bin<(rng):
                 plt.subplot2grid((int(sz_x),int(sz_y)), (int(i),int(j)))
-                
-                plt.hist(c_samples[mass_bin],bins=bins,normed=True,label='MCMC posterior')
-                #Gaussian plotting
-                x=np.linspace(np.min(c_samples),np.max(c_samples),1000) 
-                normstdis=1/(np.sqrt(2*(results[mass_bin,3]**2)*mth.pi))*np.exp(-((x-results[mass_bin,2])**2)/(2*results[mass_bin,3]**2))
-                plt.plot(x,normstdis,label='Gaussian fit')
-                #info table
-                rows=['nwalk - stps','Lo - Hi','c+-e']                
-                data_fnc=[['%s - %s'%(nwalkers,steps_wlk)],['%s - %s'%(results[mass_bin,0],results[mass_bin,1])],['%s - %s'%(results[mass_bin,2],results[mass_bin,3])]]
-                plt.table(cellText=data_fnc,loc='top',rowLabels=rows,colWidths=0.5 ,cellLoc='center')          
-                mass_bin+=1#dictionary tally
+                if method=='grid' or method=='bootstrap':
+                   
+                    plt.plot(c_samples[mass_bin],label='grid posterior')
+                    #info table
+                    rows=['Lo - Hi','c+-e']                
+                    data_fnc=[['%s - %s'%(results[mass_bin,0],results[mass_bin,1])],['%s - %s'%(results[mass_bin,2],results[mass_bin,3])]]
+                    plt.table(cellText=data_fnc,loc='top',rowLabels=rows,colWidths=[0.5 for x in rows] ,cellLoc='center')          
+                    mass_bin+=1#dictionary tally
+                    
+                    
+                if method=='mcmc':
+                                                            
+                    plt.hist(c_samples[mass_bin],bins=bins,normed=True,label='MCMC posterior')
+                    #Gaussian plotting
+                    x=np.linspace(np.min(c_samples),np.max(c_samples),1000) 
+                    normstdis=1/(np.sqrt(2*(results[mass_bin,3]**2)*mth.pi))*np.exp(-((x-results[mass_bin,2])**2)/(2*results[mass_bin,3]**2))
+                    plt.plot(x,normstdis,label='Gaussian fit')
+                    #info table
+                    rows=['nwalk - stps','Lo - Hi','c+-e']                
+                    data_fnc=[['%s - %s'%(args['nwalkers'],args['steps_wlk'])],['%s - %s'%(results[mass_bin,0],results[mass_bin,1])],['%s - %s'%(results[mass_bin,2],results[mass_bin,3])]]
+                    plt.table(cellText=data_fnc,loc='top',rowLabels=rows,colWidths=[0.5 for x in rows],cellLoc='center')          
+                    mass_bin+=1#dictionary tally
     
-    plt.savefig('myden_mcmcpost_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.h5'%(lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt))
+    if method=='grid': plt.savefig('myden_gridpost_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.png'%(lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt))
+    if method=='mcmc': plt.savefig('myden_mcmcpost_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.png'%(lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt))
+    if method=='bootstrap': plt.savefig('myden_bootstrap_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.png'%(lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt))
+
+def fig_5_trowland(results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type):
+
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    #Trowland et al. 2012 data -------------------------------------------------
+    mass_holly=np.array([11.63,12.21,12.79,13.37,13.95])
+    if smooth_scl==1:
+        #Holly's figure-5 1Mpc scale, z=0 (red)
+        c_vals_trowland=np.array([-0.049,-0.03,-0.055,0.26])
+        c_error_trowland_neg=np.array([0.001,0.04,0.1,0.33])
+        c_error_trowland_pos=np.array([0.001,0.04,0.1,0.11])
+        mass_holly=np.array([11.63,12.21,12.79,13.37])
+    if smooth_scl==3.5:
+        #Holly's figure-5 3.5Mpc scale, z=0 (red)
+        c_vals_trowland=np.array([-0.044,-0.00001,0.052,0.145,0.462])
+        c_error_trowland_neg=c_vals_trowland-np.array([-0.04,-0.01,0.048,0.1,0.15])
+        c_error_trowland_pos=np.array([-0.048,0.005,0.075,0.2,0.55])-c_vals_trowland
+    if smooth_scl==2:
+        #Holly's figure-5 2Mpc scale, z=0 (red)
+        c_vals_trowland=np.array([-0.047,-0.023,0.025,0.145,0.057])
+        c_error_trowland_neg=c_vals_trowland-np.array([-0.05,-0.04,0.0001,-0.05,-0.2])
+        c_error_trowland_pos=np.array([-0.058,-0.005,0.05,0.2,0.3])-c_vals_trowland
+    if smooth_scl==5:
+        #Holly's figure-5 5Mpc scale, z=0 (red)
+        c_vals_trowland=np.array([-0.044,0.003,0.04,0.14,0.27])
+        c_error_trowland_neg=c_vals_trowland-np.array([-0.047,-0.004,0.03,0.065,0.05])
+        c_error_trowland_pos=np.array([-0.043,0.0025,0.055,0.17,0.4])-c_vals_trowland
+    #---------------------------------------------------------------------------
+
+    plt.figure()
+    
+    ax2=plt.subplot2grid((1,1), (0,0))
+    ax2.axhline(y=0, xmin=0, xmax=15, color = 'k',linestyle='--')
+    #my c val plot
+    ax2.plot(results[:,0],results[:,2],'g-',label='spin-filament.')
+    ax2.fill_between(results[:,0], results[:,2]-abs(results[:,3]), results[:,2]+abs(results[:,3]),facecolor='green',alpha=0.3)
+    #Trowland plot
+    ax2.plot(mass_holly,c_vals_trowland,'r-',label='Trowland et al. 2012 ')
+    ax2.fill_between(mass_holly, c_vals_trowland-c_error_trowland_neg, c_vals_trowland+c_error_trowland_pos,facecolor='red',alpha=0.3)
+    
+    plt.ylabel('c')
+    plt.xlabel('log Mass[M_solar]')   
+    plt.title('smoothing: %sMpc'%smooth_scl)
+    plt.legend(loc='upper right')
+    plt.savefig('MOD_FIT_PLOT_grid_%s_smth_scl%s.png'%(grid_nodes,smooth_scl)) 
+
+def mod_data_ovrplt(diction,results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type,dp_bins):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    #grid size calc.
+    rng=len(diction)
+    sz_x=round(rng/2.0)
+    sz_y=round(rng/2.0)
+    while sz_x*sz_y<(rng):
+        sz_y+=1    
+    while sz_x*sz_y>(rng+1):
+        sz_y-=1       
+    mass_bin=0#dictionary tally
+    for i in range(int(sz_x)):
+        for j in range(int(sz_y)):
+            if mass_bin<(rng):
+                plt.subplot2grid((int(sz_x),int(sz_y)), (int(i),int(j)))
+                #data_mod overplot
+
+                #plotting data
+                data=np.histogram(diction[mass_bin],bins=dp_bins,density=True)
+                bin_vals=np.delete(data[1],len(data[1])-1,0)
+                plt.plot(bin_vals,data[0],color='r',label='data')
+                plt.axhline(y=1, xmin=0, xmax=15, color = 'k',linestyle='--')
+                
+                dotprodval=np.round(np.linspace(0,bin_vals[len(bin_vals)-1],1000),3)#value for each index in costheta array
+                #plotting model with errors
+                model=(1-results[mass_bin,2])*np.sqrt(1+1.*(results[mass_bin,2]/2))*(1-results[mass_bin,2]*(1-1.5*(dotprodval)**2))**(-1.5)
+                model_min=(1-(results[mass_bin,2]-results[mass_bin,3]))*np.sqrt(1+((results[mass_bin,2]-results[mass_bin,3])/2))*(1-(results[mass_bin,2]-results[mass_bin,3])*(1-1.5*(dotprodval)**2))**(-1.5)
+                model_max=(1-(results[mass_bin,2]+results[mass_bin,3]))*np.sqrt(1+((results[mass_bin,2]+results[mass_bin,3])/2))*(1-(results[mass_bin,2]+results[mass_bin,3])*(1-1.5*(dotprodval)**2))**(-1.5)
+                
+                plt.plot(dotprodval,model,color='b',label='model')
+                plt.plot(dotprodval,model_min,color='g',label='model_error_min')
+                plt.plot(dotprodval,model_max,color='y',label='model_error_max')
+                plt.legend(loc='upper left')
+    
+    plt.savefig('MOD_DATA_OVRPLT_grid_%s_smth_scl%s.png'%(grid_nodes,smooth_scl))
