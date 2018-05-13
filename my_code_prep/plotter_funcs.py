@@ -298,7 +298,7 @@ def eigenvalue_plts(eig_one,eig_two,eig_three,grid_nodes,sim_sz,smooth_scl):
     plt.ylabel('PDF')
     plt.savefig('/scratch/GAMNSCM2/bolchoi_z0/correl/DTFE/files/output_files/dotproduct/spin_lss/dotprod_plots/EIGENVALUES_DIST_gd%d_sim_sz%s_smooth%sMpc.png' %(grid_nodes,sim_sz,smooth_scl))
 
-def posterior_plt(c_samples,results,bins,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type,method,**args): 
+def posterior_plt(cosmology,diction_2,results,bins,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type,method,**args): 
     #Posterior plotting
     import matplotlib
     matplotlib.use('Agg')
@@ -307,7 +307,7 @@ def posterior_plt(c_samples,results,bins,sim_sz,grid_nodes,smooth_scl,tot_mass_b
     import numpy as np
     
     #grid size calc.
-    rng=len(c_samples)
+    rng=len(results)
     sz_x=round(rng/2.0)
     sz_y=round(rng/2.0)
     while sz_x*sz_y<(rng):
@@ -315,23 +315,40 @@ def posterior_plt(c_samples,results,bins,sim_sz,grid_nodes,smooth_scl,tot_mass_b
     while sz_x*sz_y>(rng+1):
         sz_y-=1       
     mass_bin=0#dictionary tally
+    plt.figure(figsize=(15,15))
+    plt.subplots_adjust(hspace=0.3,wspace=0.12,top=0.9)
     for i in range(int(sz_x)):
         for j in range(int(sz_y)):
             if mass_bin<(rng):
                 plt.subplot2grid((int(sz_x),int(sz_y)), (int(i),int(j)))
-                if method=='grid' or method=='bootstrap':
+                plt.suptitle('%s %s method posteriors'%(cosmology,method))
+                if method=='bootstrap':
                    
-                    plt.plot(c_samples[mass_bin],label='grid posterior')
+                    plt.hist(diction_2[mass_bin],bins=bins,normed=True,label='Posterior')
                     #info table
-                    rows=['Lo - Hi','c+-e']                
-                    data_fnc=[['%s - %s'%(results[mass_bin,0],results[mass_bin,1])],['%s - %s'%(results[mass_bin,2],results[mass_bin,3])]]
-                    plt.table(cellText=data_fnc,loc='top',rowLabels=rows,colWidths=[0.5 for x in rows] ,cellLoc='center')          
+                    rows=['Lo - Hi','$\overline{x}$ $\pm$ $1\sigma$']                
+                    data_fnc=[['%s - %s $log_{10}(M_\odot)$'%(round(results[mass_bin,0],3),round(results[mass_bin,1],3))],['%s $\pm$ %s'%(round(results[mass_bin,2],3),round(results[mass_bin,3],3))]]
+                    tbl_fnc=plt.table(cellText=data_fnc,loc='top',rowLabels=rows,colWidths=[0.5 for x in rows] ,cellLoc='center')          
                     mass_bin+=1#dictionary tally
+                    tbl_fnc.set_fontsize(12)
+                    tbl_fnc.scale(1.2, 1.2) 
+                    plt.xlabel('Mean distribution')
+                   
+                if method=='grid':
                     
-                    
+                    c=np.linspace(-0.99,0.99,args['grid_density'])
+                    plt.plot(c,diction_2[mass_bin],label='Posterior')
+                    #info table
+                    rows=['Lo - Hi','c $\pm$ $1\sigma$']                
+                    data_fnc=[['%s - %s $log_{10}(M_\odot)$'%(round(results[mass_bin,0],3),round(results[mass_bin,1],3))],['%s $\pm$ %s'%(round(results[mass_bin,2],3),round(results[mass_bin,3],3))]]
+                    tbl_fnc=plt.table(cellText=data_fnc,loc='top',rowLabels=rows,colWidths=[0.5 for x in rows] ,cellLoc='center')          
+                    mass_bin+=1#dictionary tally
+                    tbl_fnc.set_fontsize(12)
+                    tbl_fnc.scale(1.2, 1.2)
+                    plt.xlabel('c')
                 if method=='mcmc':
                                                             
-                    plt.hist(c_samples[mass_bin],bins=bins,normed=True,label='MCMC posterior')
+                    plt.hist(diction_2[mass_bin],bins=bins,normed=True,label='MCMC posterior')
                     #Gaussian plotting
                     x=np.linspace(np.min(c_samples),np.max(c_samples),1000) 
                     normstdis=1/(np.sqrt(2*(results[mass_bin,3]**2)*mth.pi))*np.exp(-((x-results[mass_bin,2])**2)/(2*results[mass_bin,3]**2))
@@ -342,9 +359,10 @@ def posterior_plt(c_samples,results,bins,sim_sz,grid_nodes,smooth_scl,tot_mass_b
                     plt.table(cellText=data_fnc,loc='top',rowLabels=rows,colWidths=[0.5 for x in rows],cellLoc='center')          
                     mass_bin+=1#dictionary tally
     
-    if method=='grid': plt.savefig('myden_gridpost_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.png'%(lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt))
-    if method=='mcmc': plt.savefig('myden_mcmcpost_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.png'%(lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt))
-    if method=='bootstrap': plt.savefig('myden_bootstrap_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.png'%(lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt))
+    if method=='grid': plt.savefig('%s_myden_gridpost_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s_%sgriddens.png'%(cosmology,lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,args['grid_density']))
+    if method=='mcmc': plt.savefig('%s_myden_mcmcpost_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s.png'%(cosmology,lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt))
+    if method=='bootstrap': plt.savefig('%s_myden_bootstrap_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s_.png'%(cosmology,lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt))
+
 
 def fig_5_trowland(results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type):
 
@@ -395,14 +413,14 @@ def fig_5_trowland(results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_
     plt.legend(loc='upper right')
     plt.savefig('MOD_FIT_PLOT_grid_%s_smth_scl%s.png'%(grid_nodes,smooth_scl)) 
 
-def mod_data_ovrplt(diction,results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type,dp_bins):
+def mod_data_ovrplt(cosmology,diction,results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type,**args):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     import numpy as np
     
     #grid size calc.
-    rng=len(diction)
+    rng=len(results)
     sz_x=round(rng/2.0)
     sz_y=round(rng/2.0)
     while sz_x*sz_y<(rng):
@@ -410,14 +428,17 @@ def mod_data_ovrplt(diction,results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,p
     while sz_x*sz_y>(rng+1):
         sz_y-=1       
     mass_bin=0#dictionary tally
+    plt.figure(figsize=(15,15))
+    plt.subplots_adjust(hspace=0.3,wspace=0.12,top=0.9)
     for i in range(int(sz_x)):
         for j in range(int(sz_y)):
             if mass_bin<(rng):
                 plt.subplot2grid((int(sz_x),int(sz_y)), (int(i),int(j)))
+                plt.suptitle('%s model-data overplot'%(cosmology))
                 #data_mod overplot
 
                 #plotting data
-                data=np.histogram(diction[mass_bin],bins=dp_bins,density=True)
+                data=np.histogram(diction[mass_bin],bins=args['dp_bins'],density=True)
                 bin_vals=np.delete(data[1],len(data[1])-1,0)
                 plt.plot(bin_vals,data[0],color='r',label='data')
                 plt.axhline(y=1, xmin=0, xmax=15, color = 'k',linestyle='--')
@@ -431,6 +452,9 @@ def mod_data_ovrplt(diction,results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,p
                 plt.plot(dotprodval,model,color='b',label='model')
                 plt.plot(dotprodval,model_min,color='g',label='model_error_min')
                 plt.plot(dotprodval,model_max,color='y',label='model_error_max')
+                plt.xlabel('|cos($\theta$)|')
+                plt.ylabel('Normalized number of halos')
                 plt.legend(loc='upper left')
-    
-    plt.savefig('MOD_DATA_OVRPLT_grid_%s_smth_scl%s.png'%(grid_nodes,smooth_scl))
+                mass_bin+=1#dictionary tally
+
+    plt.savefig('%s_MOD_DATA_OVRPLT_grid_%s_smth_scl%s.png'%(cosmology,grid_nodes,smooth_scl))
