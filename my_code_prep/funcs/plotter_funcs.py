@@ -316,7 +316,7 @@ def posterior_plt(cosmology,diction_2,results,bins,sim_sz,grid_nodes,smooth_scl,
         sz_y-=1       
     mass_bin=0#dictionary tally
     plt.figure(figsize=(15,15))
-    plt.subplots_adjust(hspace=0.3,wspace=0.12,top=0.9)
+    plt.subplots_adjust(hspace=0.4,wspace=0.12,top=0.9)
     for i in range(int(sz_x)):
         for j in range(int(sz_y)):
             if mass_bin<(rng):
@@ -327,7 +327,7 @@ def posterior_plt(cosmology,diction_2,results,bins,sim_sz,grid_nodes,smooth_scl,
                     plt.hist(diction_2[mass_bin],bins=bins,normed=True,label='Posterior')
                     #info table
                     rows=['Lo - Hi','$\overline{x}$ $\pm$ $1\sigma$']                
-                    data_fnc=[['%s - %s $log_{10}(M_\odot)$'%(round(results[mass_bin,0],3),round(results[mass_bin,1],3))],['%s $\pm$ %s'%(round(results[mass_bin,2],3),round(results[mass_bin,3],3))]]
+                    data_fnc=[['%s - %s $log_{10}(M_\odot)$'%(round(results[mass_bin,0],3),round(results[mass_bin,1],3))],['$%s^{+%s}_{-%s}$'%(round(results[mass_bin,2],3),round(results[mass_bin,3],3),round(results[mass_bin,4],3))]]
                     tbl_fnc=plt.table(cellText=data_fnc,loc='top',rowLabels=rows,colWidths=[0.5 for x in rows] ,cellLoc='center')          
                     mass_bin+=1#dictionary tally
                     tbl_fnc.set_fontsize(12)
@@ -339,8 +339,9 @@ def posterior_plt(cosmology,diction_2,results,bins,sim_sz,grid_nodes,smooth_scl,
                     c=np.linspace(-0.99,0.99,args['grid_density'])
                     plt.plot(c,diction_2[mass_bin],label='Posterior')
                     #info table
-                    rows=['Lo - Hi','c $\pm$ $1\sigma$']                
-                    data_fnc=[['%s - %s $log_{10}(M_\odot)$'%(round(results[mass_bin,0],3),round(results[mass_bin,1],3))],['%s $\pm$ %s'%(round(results[mass_bin,2],3),round(results[mass_bin,3],3))]]
+                    rows=['Lo - Hi','c $\pm$ $1\sigma$','no. halos']                
+                    data_fnc=[['%s - %s $log_{10}(M_\odot)$'%(round(results[mass_bin,0],3),round(results[mass_bin,1],3))],['$%s^{+%s}_{-%s}$'%(round(results[mass_bin,2],3),round(results[mass_bin,3],3),round(results[mass_bin,4],3))],[args['no_halos'][mass_bin]]]
+
                     tbl_fnc=plt.table(cellText=data_fnc,loc='top',rowLabels=rows,colWidths=[0.5 for x in rows] ,cellLoc='center')          
                     mass_bin+=1#dictionary tally
                     tbl_fnc.set_fontsize(12)
@@ -364,7 +365,7 @@ def posterior_plt(cosmology,diction_2,results,bins,sim_sz,grid_nodes,smooth_scl,
     if method=='bootstrap': plt.savefig('%s_myden_bootstrap_LSS%s_spin_sim%sMpc_grid%s_smth%sMpc_%sbins_partclfilt%s_.png'%(cosmology,lss_type,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt))
 
 
-def fig_5_trowland(results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type):
+def fig_5_trowland(cosmology,snapshot,results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type):
 
     import matplotlib
     matplotlib.use('Agg')
@@ -402,7 +403,7 @@ def fig_5_trowland(results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_
     ax2.axhline(y=0, xmin=0, xmax=15, color = 'k',linestyle='--')
     #my c val plot
     ax2.plot(results[:,0],results[:,2],'g-',label='spin-filament.')
-    ax2.fill_between(results[:,0], results[:,2]-abs(results[:,3]), results[:,2]+abs(results[:,3]),facecolor='green',alpha=0.3)
+    ax2.fill_between(results[:,0], results[:,2]-abs(results[:,4]), results[:,2]+abs(results[:,3]),facecolor='green',alpha=0.3)
     #Trowland plot
     ax2.plot(mass_holly,c_vals_trowland,'r-',label='Trowland et al. 2012 ')
     ax2.fill_between(mass_holly, c_vals_trowland-c_error_trowland_neg, c_vals_trowland+c_error_trowland_pos,facecolor='red',alpha=0.3)
@@ -411,7 +412,7 @@ def fig_5_trowland(results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_
     plt.xlabel('log Mass[M_solar]')   
     plt.title('smoothing: %sMpc'%smooth_scl)
     plt.legend(loc='upper right')
-    plt.savefig('MOD_FIT_PLOT_grid_%s_smth_scl%s.png'%(grid_nodes,smooth_scl)) 
+    plt.savefig('%s_snapshot_0%s_MOD_FIT_PLOT_grid_%s_smth_scl%s.png'%(cosmology,snapshot,grid_nodes,smooth_scl)) 
 
 def mod_data_ovrplt(cosmology,diction,results,sim_sz,grid_nodes,smooth_scl,tot_mass_bins,particles_filt,lss_type,**args):
     import matplotlib
@@ -446,7 +447,7 @@ def mod_data_ovrplt(cosmology,diction,results,sim_sz,grid_nodes,smooth_scl,tot_m
                 dotprodval=np.round(np.linspace(0,bin_vals[len(bin_vals)-1],1000),3)#value for each index in costheta array
                 #plotting model with errors
                 model=(1-results[mass_bin,2])*np.sqrt(1+1.*(results[mass_bin,2]/2))*(1-results[mass_bin,2]*(1-1.5*(dotprodval)**2))**(-1.5)
-                model_min=(1-(results[mass_bin,2]-results[mass_bin,3]))*np.sqrt(1+((results[mass_bin,2]-results[mass_bin,3])/2))*(1-(results[mass_bin,2]-results[mass_bin,3])*(1-1.5*(dotprodval)**2))**(-1.5)
+                model_min=(1-(results[mass_bin,2]-results[mass_bin,4]))*np.sqrt(1+((results[mass_bin,2]-results[mass_bin,4])/2))*(1-(results[mass_bin,2]-results[mass_bin,4])*(1-1.5*(dotprodval)**2))**(-1.5)
                 model_max=(1-(results[mass_bin,2]+results[mass_bin,3]))*np.sqrt(1+((results[mass_bin,2]+results[mass_bin,3])/2))*(1-(results[mass_bin,2]+results[mass_bin,3])*(1-1.5*(dotprodval)**2))**(-1.5)
                 
                 plt.plot(dotprodval,model,color='b',label='model')
