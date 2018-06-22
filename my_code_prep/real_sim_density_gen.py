@@ -2,17 +2,22 @@ import numpy as np
 import math as mth
 import pynbody
 import h5py
+import sys
 
-sim_type=sys.argv[1]          #'dm_only' 'DTFE'
+sim_type=sys.argv[1]           #'dm_only' 'dm_gas'
 cosmology=sys.argv[2]          #DMONLY:'lcdm'  'cde0'  'wdm2'DMGAS: 'lcdm' 'cde000' 'cde050' 'cde099'
 snapshot=int(sys.argv[3])      #'12  '11'...
-den_type=sys.argv[4]           #'DTFE' 'my_den'
-grid_nodes=1250     #density resolution
+den_type='my_den'              #not an option for this code
+grid_nodes=1250                #density resolution
 
 #Assigns v to angular momentum of halos
 f=pynbody.load("/scratch/GAMNSCM2/%s/%s/snapshot_0%s/snapshot_0%s"%(sim_type,cosmology,snapshot,snapshot))
-f.keys()
-a=f['pos']
+a=f.dm['pos']
+dm_mass=np.unique(f.dm['mass'])
+if sim_type=='dm_gas': 
+    a=np.vstack((a,f.gas['pos']))
+    gas_mass=np.unique(f.gas['mass'])
+
 Xc=np.asarray(a[:,0]).astype(float)
 Yc=np.asarray(a[:,1]).astype(float)
 Zc=np.asarray(a[:,2]).astype(float)
@@ -34,12 +39,20 @@ Zc_minus=Zc_min*grid_nodes/(Zc_max-Zc_min)+0.0000001
 
 grid=np.zeros((grid_nodes,grid_nodes,grid_nodes))
 
-for i in range(len(Xc)):
+for i in range(len(f.dm['pos'])):
    
     grid_index_x=mth.trunc(Xc[i]*Xc_mult-Xc_minus)      
     grid_index_y=mth.trunc(Yc[i]*Yc_mult-Yc_minus) 
-    grid_index_z=mth.trunc(Zc[i]*Zc_mult-Zc_minus) 
-    grid[grid_index_x,grid_index_y,grid_index_z]=grid[grid_index_x,grid_index_y,grid_index_z]+1
+    grid_index_z=mth.trunc(Zc[i]*Zc_mult-Zc_minus)     
+    grid[grid_index_x,grid_index_y,grid_index_z]=grid[grid_index_x,grid_index_y,grid_index_z]+dm_mass
+
+if sim_type=='dm_gas':
+    for i in range(i+1,len(Xc)):
+       
+        grid_index_x=mth.trunc(Xc[i]*Xc_mult-Xc_minus)      
+        grid_index_y=mth.trunc(Yc[i]*Yc_mult-Yc_minus) 
+        grid_index_z=mth.trunc(Zc[i]*Zc_mult-Zc_minus) 
+        grid[grid_index_x,grid_index_y,grid_index_z]=grid[grid_index_x,grid_index_y,grid_index_z]+gas_mass
 
 grid=grid.flatten()
 
